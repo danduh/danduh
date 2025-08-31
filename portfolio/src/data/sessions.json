@@ -1,0 +1,146 @@
+[
+  {
+    "id": 145781,
+    "title": "Dev Smarter, Not Harder: AI for the Lazy (but Productive) Developer",
+    "description": "Let's be real—coding can be annoying sometimes. You know, repetitive tasks, manual testing, API hookups that make you wanna cry... What if we could get AI to do all that boring stuff and leave us the fun part of actually creating cool features?\r\n\r\nIn this talk, I’ll show you how AI can speed up your frontend workflow from design to tests without losing quality. We'll see some tools in action (yeah, less theory—more practical magic!) and figure out how AI can turn any dev team into a supercharged, happier bunch.",
+    "sessionUrl": "https://sessionize.com/s/danduh/dev-smarter-not-harder-ai-for-the-lazy-but-product/145781",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 123660,
+    "title": "The Browser Revolution: Built-In AI APIs",
+    "description": "Discover how AI is becoming a first-class citizen in your browser! In this session, we’ll explore Chrome’s groundbreaking Built-In AI APIs—now available behind feature flags in regular Chrome and evolving rapidly in Canary. From language detection to summarization and even creative writing, these APIs promise to revolutionize how we build web applications.\r\nWhether you're a developer, tech enthusiast, or decision-maker, this talk will equip you with insights and inspiration to stay ahead in the fast-moving AI landscape.",
+    "sessionUrl": "https://sessionize.com/s/danduh/the-browser-revolution-built-in-ai-apis/123660",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 100575,
+    "title": "Gen-AI on Localhost: Prompt, MCP, Fine-Tune and RAG&Roll",
+    "description": "Generative AI on your local machine?! In this hands-on workshop, we’ll guide you through the entire journey of setting up and optimizing Gen-AI models. You’ll start with prompt engineering, mastering prompts that deliver relevant results. Then, move on to fine-tuning techniques to tailor models for your specific needs. Discover Retrieval Augmented Generation (RAG), where document retrieval meets AI for smarter, context-aware answers. Get ready to RAG&Roll with Gen-AI on localhost! And of course, how could it be without it — we will create our own MCP server and use it right away!",
+    "sessionUrl": "https://sessionize.com/s/danduh/gen-ai-on-localhost-prompt-mcp-fine-tune-and-ragro/100575",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 28261,
+    "title": "Beyond Passwords: Exploring Passwordless Authentication for Improved Security",
+    "description": "With the increasing number of web apps, we can see more and more data breaches. Passwords are the biggest attack vector and are responsible for more than 80% of breaches, and they also lead to attacks such as:\r\n* Credential stuffing\r\n* Corporate account takeover (CATO)\r\n* Password Spraying\r\n* Brute force attack. \r\nLet’s take a look at password alternatives - Passwordless Authentications.\r\nWe'll talk about various options and will see live examples of implementations. \r\nAnd, of course, we will go over the benefits of using PasswordLess.",
+    "sessionUrl": "https://sessionize.com/s/danduh/beyond-passwords-exploring-passwordless-authentica/28261",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 47695,
+    "title": "Typescript Meta-Programming from 0 to 100 - workshop",
+    "description": "When applications are getting bigger, some tools and features that help to manage this increasing complexity become more required. Let's check some of these features: composition/dependency Injection, runtime type assertions, reflection/mirroring and more, and see how we can use it in real live use cases.",
+    "sessionUrl": "https://sessionize.com/s/danduh/typescript-meta-programming-from-0-to-100-workshop/47695",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 47694,
+    "title": "Typescript Compiler API from 0 to 100",
+    "description": "TypeScript has become very popular in the past few years. Many of us (developers) have a good understanding of the language, except not many of us know how the compiler works internally. \r\nUnderstanding the internal mechanism of the TypeScript compiler and API will be extremely valuable if you need to improve the build pipeline or develop custom tools.\r\nOr even generate your code instead of coding it.",
+    "sessionUrl": "https://sessionize.com/s/danduh/typescript-compiler-api-from-0-to-100/47694",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 44982,
+    "title": "Typescript Meta-Programming from 0 to 100.",
+    "description": "When applications are getting bigger, some tools and features that help to manage this increasing complexity become more required. Let's check some of these features: composition/dependency Injection, runtime type assertions, reflection/mirroring, and more, and see how we can use them in live coding sessions.\r\n",
+    "sessionUrl": "https://sessionize.com/s/danduh/typescript-meta-programming-from-0-to-100/44982",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 146750,
+    "title": "Prompts Are Code. Start Treating Them That Way.",
+    "description": "You’re building an AI agent. Or maybe a chatbot, a simple assistant, or the next shiny AI-powered app. No matter the use case, there’s always one thing at the core: the prompt. But here’s the problem - what happens when you need to change it?\r\nDo you really want to redeploy your whole app just to tweak a single sentence in the system prompt?\r\nThe fastest way to improve an AI agent is by updating its prompt. That’s why prompts should be managed outside the codebase: versioned, tested, and safely rolled out like.\r\nIn this talk, we’ll dive into why prompt versioning matters, how to evolve prompts without redeploys, and how separating prompts from code unlocks faster iteration, safer experimentation, and even A/B testing.",
+    "sessionUrl": "https://sessionize.com/s/danduh/prompts-are-code.-start-treating-them-that-way/146750",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 145803,
+    "title": "From Idea to App with AI: Build a Full-Stack Project Using VS Code & Copilot (or any other IDE)",
+    "description": "In this hands-on workshop, we’ll take a bold app concept and build it together — from start to finish — using GitHub Copilot and an AI-ready IDE (like VS Code, JetBrains, Cursor, or others). You’ll see how AI can help you write a product plan, set up the database, build a backend with NestJS, and create a frontend with React.\r\n\r\nNo slides, no theory overload — just real development with real tools. We’ll use Copilot’s chat, agent mode, and IDE shortcuts to move fast, stay focused, and skip the boring stuff.\r\n\r\nBy the end, you’ll see that working with AI isn’t scary — it actually makes coding more fun. Let’s build something cool (and maybe blow your mind a little).",
+    "sessionUrl": "https://sessionize.com/s/danduh/from-idea-to-app-with-ai-build-a-full-stack-projec/145803",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 142566,
+    "title": "(MCP Security) - How Your Friendly MCP Tool Might Betray You ",
+    "description": "We all love the convenience and power of AI-enhanced tools using MCP. But what if these handy servers had a hidden dark side? Let's dive into real-world examples of how MCP servers can silently leak your data, execute malicious commands, or even grant attackers access to your systems.\r\nYou’ll learn about sleeper attacks, tool poisoning, shadowing, and remote code execution—complete with chilling real-life cases and practical advice on defending yourself. \r\nThis is an eye-opening session that exposes why blind trust in MCP is a dangerous game.",
+    "sessionUrl": "https://sessionize.com/s/danduh/mcp-security-how-your-friendly-mcp-tool-might-betr/142566",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 125686,
+    "title": "🔥 Generative UI: The Future of Frontend (And Why You Should Care)",
+    "description": "This talk is all about Generative UI. AI-driven user interfaces that actually adapt to users in real time. No more static, one-size-fits-all UIs. We’re talking about apps that think, respond, and evolve based on what users need.\r\n\r\nBut here’s the catch: if you’re still building UIs like it’s 2020, you might be in trouble. We’ll dig into why modular designs (like Micro-Frontends) are the key to making AI-ready web apps, what skills frontend devs need to pick up right now, and how to work with AI instead of getting left behind.",
+    "sessionUrl": "https://sessionize.com/s/danduh/generative-ui-the-future-of-frontend-and-why-you-s/125686",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 100577,
+    "title": "AI in Your Browser: Exploring Chrome's Built-In LLM",
+    "description": "Let's see how Chrome’s built-in AI is changing the future of web development. In this talk we will try on-device and hybrid AI capabilities, including APIs for tasks like translation, summarization, and general chat-based interactions. We’ll look at real-world use cases, practical examples, and how these tools can enhance user experiences and make applications even better. Learn how to integrate these features into your projects and stay ahead in the new world of AI-driven web development.",
+    "sessionUrl": "https://sessionize.com/s/danduh/ai-in-your-browser-exploring-chromes-built-in-llm/100577",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 92773,
+    "title": "Thank you for hiring me, but I'm quit! 12 companies in 12 years and 12 lessons Learned.",
+    "description": "I want to share an exciting 12-year journey through the tech world, moving through 12 different companies. Learn how to confidently make job changes, respect your needs, ace interviews, get better job offers, and gain lots of tech experience. \r\nThis talk is great for anyone thinking about changing jobs or wanting to grow in their career. Find out how saying, \"Thank you for hiring me, but I’m quitting,\" can actually be a good step for finding success and learning more about yourself.",
+    "sessionUrl": "https://sessionize.com/s/danduh/thank-you-for-hiring-me-but-im-quit-12-companies-i/92773",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 90471,
+    "title": "AI-Powered E2E UI Testing: Faster Creation, Easier Maintenance",
+    "description": "This session will guide you through the advanced field of AI-Powered E2E UI Testing, focusing on how it speeds up test creation and simplifies test maintenance. We'll begin by examining the challenges in generating E2E tests with AI, noting how this differs from the simpler task of creating unit tests. \r\nThe discussion will then shift to a solution that addresses these challenges effectively. Prepare to see a live demonstration where we'll craft an E2E test using popular tools like Cypress or Playwright. To wrap up, we'll look into how AI comes close to fully automating the maintenance of our test suites, ensuring they stay up-to-date with minimal manual intervention. ",
+    "sessionUrl": "https://sessionize.com/s/danduh/ai-powered-e2e-ui-testing-faster-creation-easier-m/90471",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 73647,
+    "title": "MicroFrontends: The Future of Agile and Scalable Frontend Development",
+    "description": "Dive into the world of MicroFrontends, a game-changer in agile and scalable frontend development. This talk explores how this approach breaks down complex applications into manageable segments, fostering enhanced team collaboration and making testing simpler. It emphasizes the adaptability of MicroFrontends in integrating diverse tools, thereby boosting efficiency and innovation in development processes.  Discover how MicroFrontends not only improve development processes but also pave the way for more adaptive, scalable software solutions.",
+    "sessionUrl": "https://sessionize.com/s/danduh/microfrontends-the-future-of-agile-and-scalable-fr/73647",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 60136,
+    "title": "Easy MicroFrontend Adoption: Using Schematics, Builders, and TypeScript Compiler API",
+    "description": "MicroFrontends are getting more popular because they offer advantages over the usual large, single frontend applications, like better flexibility and the ability to work on parts of the app separately. But, this approach can make the whole system more complex to develop and manage. This complexity means we need a strong base that can be shared by different teams. In this session, we will discuss how tools like schematics, builders, and the TypeScript Compiler API can simplify building this base. We will learn how these tools can help bring MicroFrontend architecture into your current projects easily and efficiently, making your development process smoother.",
+    "sessionUrl": "https://sessionize.com/s/danduh/easy-microfrontend-adoption-using-schematics-build/60136",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 58085,
+    "title": "Micro-Frontend Architecture and Module Federation: Making the Right Choices for Your Project",
+    "description": "The micro-frontend architecture is attracting more and more developers, and module federation is a great addition to this architectural pattern. And as with any new technology, new questions are raised.\r\nLet's take real-life examples and live coding to answer the following but not limited to: how we should divide apps and whether there are specific criteria to separate them. Is my project suitable for the Micro-Frontend at all? When should I use Micro-Frontend and when Module Federation? And some other questions. ",
+    "sessionUrl": "https://sessionize.com/s/danduh/micro-frontend-architecture-and-module-federation-/58085",
+    "languageCode": "en",
+    "language": "English"
+  },
+  {
+    "id": 26365,
+    "title": "Why Full Cycle is the Key to Success in Today's Fast-Paced Web Development Industry",
+    "description": "In most articles Full Stack is described as “... an engineer who can handle all the work of databases, servers, systems engineering, and clients. …may be a mobile stack, a Web stack, or a native application stack.”\r\nBut is it enough in our time? When “time to market” is critical. When bug fixing on production can’t take longer than a couple of hours. And it doesn't matter if we are talking about a large company or a small startup, new reality more often requires developers to be a “Full Cycle”, - design, development, test, deploy, operate, and support.\r\nLet's talk about the past, present and why ‘Full Cycle’ is a future of Web Development.\r\n",
+    "sessionUrl": "https://sessionize.com/s/danduh/why-full-cycle-is-the-key-to-success-in-todays-fas/26365",
+    "languageCode": "en",
+    "language": "English"
+  }
+]

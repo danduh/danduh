@@ -94,11 +94,11 @@ const config: Config = {
           label: 'Conferences',
           position: 'left',
         },
-        {
-          to: '/projects',
-          label: 'GitHub Projects',
-          position: 'left',
-        },
+        // {
+        //   to: '/projects',
+        //   label: 'GitHub Projects',
+        //   position: 'left',
+        // },
         {
           to: '/contact',
           label: 'Contact',
@@ -188,6 +188,19 @@ const config: Config = {
       darkTheme: prismThemes.dracula,
     },
   } satisfies Preset.ThemeConfig,
+  plugins: [
+    [
+      '@docusaurus/plugin-ideal-image',
+      {
+        quality: 70,
+        max: 1280, // max resized image's size.
+        min: 640, // min resized image's size. if original is lower, use that size.
+        steps: 3, // the max number of images generated between min and max (inclusive)
+        disableInDev: false,
+      },
+    ],
+  ],
+
 };
 
 export default config;

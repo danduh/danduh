@@ -1,0 +1,82 @@
+[
+  {
+    "title": "10 Advanced TypeScript Features Every Developer Should Know in 2025",
+    "link": "https://medium.com/@danduh/10-advanced-typescript-features-every-developer-should-know-in-2025-795036e2a518?source=rss-4690a912d4cd------2",
+    "pubDate": "Mon, 18 Aug 2025 14:34:46 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1536/1*Osw_6OB-77CQQNEykw7f0A.png",
+    "excerpt": "Here&#x2019;s a fresh batch of TypeScript features for 2025&#x2013;10+1 updates that make your code safer, smarter, and cleaner. From satisfies and constContinue reading on Medium »…"
+  },
+  {
+    "title": "Prompt Versioning: The Survival Tool Every Prompt Engineer Needs",
+    "link": "https://medium.com/@danduh/prompt-versioning-the-survival-tool-every-prompt-engineer-needs-43c69ee827dd?source=rss-4690a912d4cd------2",
+    "pubDate": "Tue, 12 Aug 2025 09:51:23 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*InST8GPyZeak7sVcTEu5XA.png",
+    "excerpt": "As Prompt Engineering goes pro, version control isn’t optional — and the smartest in the game are arming themselves with tools built just for them.Once upon a time, “writing prompts” was just a quirky thing you did when you played with a new AI toy. Now? It’s a job. An actual job. The kind with recruiters sliding into LinkedIn DMs and salary bands …"
+  },
+  {
+    "title": "MCP Servers: Powerful Allies or Sneaky Threats?",
+    "link": "https://medium.com/@danduh/mcp-servers-powerful-sneaky-threats-e4685834843a?source=rss-4690a912d4cd------2",
+    "pubDate": "Tue, 29 Jul 2025 08:30:50 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*KHkNaQki05Der97UCefS1Q.png",
+    "excerpt": "So you’ve discovered the incredible potential of MCP (Model Context Protocol) servers. Congratulations! You now have access to powerful AI integrations that can automate tasks, analyze data, and make your job easier. Sure, it connects your AI models to tools faster than you can say “data breach.”But hold your applause — because these seemingly frie…"
+  },
+  {
+    "title": "Why Formatting on LinkedIn Matters (and How I Built a Tool to Fix It with AI)",
+    "link": "https://medium.com/@danduh/why-formatting-on-linkedin-matters-and-how-i-built-a-tool-to-fix-it-with-ai-cb04c96f0fc3?source=rss-4690a912d4cd------2",
+    "pubDate": "Sat, 26 Apr 2025 11:37:13 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*xGJ5emgAE5hzxEFewg6QpQ.png",
+    "excerpt": "In the bustling, content-choked world of LinkedIn, formatting isn’t a luxury — it’s survival.Your words might be Pulitzer-worthy, but if they’re crammed into a wall of text, nobody is sticking around long enough to find out. Formatting is what takes your thoughts from “nice idea” to “must-read.”Here’s why smart LinkedIn users know formatting matter…"
+  },
+  {
+    "title": "Generative UI: smart, intent-based, and AI-driven",
+    "link": "https://medium.com/design-bootcamp/generative-ui-smart-intent-based-and-ai-driven-a45c0ee18f94?source=rss-4690a912d4cd------2",
+    "pubDate": "Mon, 24 Feb 2025 13:37:58 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*1c17TKRlloZVvD98HfatMA.png",
+    "excerpt": "Let’s be real: traditional user interfaces (UI) are a mess. They’re rigid, frustrating, and designed more for machines than for humans. We’ve all endured the endless clicking, the endless forms, the endless digging through menus just to accomplish a simple task. It’s an outdated approach that has somehow lingered like a bad habit.But what if UI cou…"
+  },
+  {
+    "title": "How to Use ESLint Like a Sane Developer (JavaScript & TypeScript Edition)",
+    "link": "https://medium.com/@danduh/how-to-use-eslint-like-a-sane-developer-javascript-typescript-edition-9e99631f8557?source=rss-4690a912d4cd------2",
+    "pubDate": "Sun, 02 Feb 2025 17:15:44 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*mNhaQwNBv-gBsLWm6xmeXA.jpeg",
+    "excerpt": "Ah, ESLint. The unsung hero standing between your codebase and complete anarchy. And yet, some developers still treat it like an oppressive overlord rather than the lifeline it actually is.Non-members can read for free by clicking my friend link!If you’ve ever had to wade through a swamp of inconsistent formatting, wildcard imports, and the occasio…"
+  },
+  {
+    "title": "Stop Worshipping Python: Why JavaScript is the Real MVP for AI Integration",
+    "link": "https://itnext.io/stop-using-python-use-javascript-for-ai-integration-37c60b0961b9?source=rss-4690a912d4cd------2",
+    "pubDate": "Sun, 26 Jan 2025 23:01:22 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1792/1*V7U4Ygj3zsIdineEwWhJtg.jpeg",
+    "excerpt": "Oh, so you think Python is the be-all and end-all for AI development? Let me guess: you&#x2019;ve binge-watched a few TensorFlow tutorials and&#x2026;Continue reading on ITNEXT »…"
+  },
+  {
+    "title": "Structuring AI Response for Better API Alignment",
+    "link": "https://itnext.io/how-to-align-ai-responses-with-json-api-contracts-e4fd9ad5f348?source=rss-4690a912d4cd------2",
+    "pubDate": "Mon, 20 Jan 2025 16:51:22 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*QwuUPys_ESl2nS4O3wqzbA.jpeg",
+    "excerpt": "Ever tried to make AI-generated responses fit into a strict JSON format or an API contract and found it frustrating? You’re not alone. In this article, we’ll keep it simple and show you practical ways to align flexible AI outputs with structured API requirements. By the end, you’ll have a solid example and some tips to make this integration process…"
+  },
+  {
+    "title": "UI, FrontEnd and JavaScript Trends to Watch in 2025",
+    "link": "https://medium.com/@danduh/ui-frontend-and-javascript-trends-to-watch-in-2025-28b428fee1cd?source=rss-4690a912d4cd------2",
+    "pubDate": "Sun, 15 Dec 2024 19:27:43 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/0*_ypoWzpcmiHW4aZ8",
+    "excerpt": "As we approach 2025, the field of UI, FrontEnd, and JavaScript development continues to evolve rapidly. New technologies and practices are shaping the way we build web applications. Staying updated is key for developers and businesses to remain competitive. Let’s explore the hottest trends expected to dominate the FrontEnd world in 2025.Rise of Bui…"
+  },
+  {
+    "title": "Window.ai: The Future of In-Browser Gen-AI",
+    "link": "https://medium.com/@danduh/window-ai-the-future-of-in-browser-gen-ai-35329e35b3ac?source=rss-4690a912d4cd------2",
+    "pubDate": "Thu, 18 Jul 2024 16:39:29 GMT",
+    "author": "Daniel Ostrovsky",
+    "image": "https://cdn-images-1.medium.com/max/1024/1*MBKklzFXYLaFaUwDxCBdJQ.png",
+    "excerpt": "In the rapidly evolving world of artificial intelligence (AI), a groundbreaking development is happening right in our browsers. With tools like Google’s Prompt API for Gemini Nano and other emerging APIs, the era of in-browser generative AI is upon us. Imagine having AI capabilities at your fingertips without relying on remote servers — this is the…"
+  }
+]

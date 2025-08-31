@@ -13,17 +13,20 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "loadYList": "node scripts/fetch-playlist.js"
+    "loadYList": "node scripts/fetch-playlist.js",
+    "loadArticles": "node scripts/fetch-articles.js"
   },
   "dependencies": {
     "@docusaurus/core": "3.8.1",
+    "@docusaurus/plugin-ideal-image": "^3.8.1",
     "@docusaurus/preset-classic": "3.8.1",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
     "dotenv": "^17.2.1",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.8.1",

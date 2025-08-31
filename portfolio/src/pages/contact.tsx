@@ -20,12 +20,12 @@ export default function Contact(): ReactNode {
             <div className="portfolio-buttons">
               <a
                 className="portfolio-button-primary"
-                href="mailto:daniel@example.com">
+                href="mailto:danduh@gmail.com">
                 Send Email
               </a>
               <a
                 className="portfolio-button-secondary"
-                href="https://linkedin.com/in/danielostrovsky"
+                href="https://linkedin.com/in/danduh"
                 target="_blank"
                 rel="noopener noreferrer">
                 LinkedIn
