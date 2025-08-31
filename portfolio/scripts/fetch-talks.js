@@ -16,4 +16,5 @@ const TALKS_URL = process.env.TALKS_URL;
     "src/data/events.json",
     JSON.stringify(talksData.events, null, 2)
   );
+  console.log(`Saved ${talksData.sessions.length} sessions to src/data/sessions.json`);
 })();

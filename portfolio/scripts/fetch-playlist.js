@@ -6,6 +6,17 @@ dotenv.config();
 const API_KEY = process.env.YT_API_KEY;
 const PLAYLIST_ID = process.env.YT_PLAYLIST_ID;
 
+console.log(`Environment check:`);
+console.log(`- YT_API_KEY: ${API_KEY ? 'SET' : 'NOT SET'}`);
+console.log(`- YT_PLAYLIST_ID: ${PLAYLIST_ID ? 'SET' : 'NOT SET'}`);
+
+if (!API_KEY || !PLAYLIST_ID) {
+  console.error('Missing required environment variables: YT_API_KEY and/or YT_PLAYLIST_ID');
+  process.exit(1);
+}
+
+console.log(`Fetching playlist ${PLAYLIST_ID} with API key XXXX`);
+
 async function fetchAll(playlistId) {
   let pageToken = "";
   const items = [];

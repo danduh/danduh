@@ -13,8 +13,10 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "loadYList": "node scripts/fetch-playlist.js",
-    "loadArticles": "node scripts/fetch-articles.js"
+    "loadPlaylist": "node scripts/fetch-playlist.js",
+    "loadArticles": "node scripts/fetch-articles.js",
+    "loadTalks": "node scripts/fetch-talks.js",
+    "loadData": "npm run loadTalks && npm run loadArticles && npm run loadPlaylist"
   },
   "dependencies": {
     "@docusaurus/core": "3.8.1",

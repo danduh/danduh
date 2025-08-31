@@ -6,6 +6,7 @@ dotenv.config();
 const parser = new Parser({ customFields: { item: [['content:encoded', 'content']] } });
 
 const FEED = process.env.MEDIUM_FEED_URL;
+console.log(`Fetching feed ${FEED}`);
 
 (async () => {
   const feed = await parser.parseURL(FEED);
