@@ -1,0 +1,22 @@
+# Dependencies
+/node_modules
+/portfolio/node_modules
+
+# Production
+/build
+/portfolio/build
+# Generated files
+/portfolio/.docusaurus
+/portfolio/.cache-loader
+
+# Misc
+/portfolio/.DS_Store
+/portfolio/.env.local
+/portfolio/.env.development.local
+/portfolio/.env.test.local
+/portfolio/.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/portfolio/.env

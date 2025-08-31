@@ -1,0 +1,713 @@
+[
+  {
+    "id": "WlO8JOBi_ks",
+    "title": "🔥 Generative UI: The Future of Frontend (And Why You Should Care) - DevConf.CZ 2025",
+    "description": "Speaker(s): Daniel Ostrovsky\n\nThis talk is all about Generative UI. AI-driven user interfaces that actually adapt to users in real time. No more static, one-size-fits-all UIs. We’re talking about apps that think, respond, and evolve based on what users need.\n\nBut here’s the catch: if you’re still building UIs like it’s 2020, you might be in trouble. We’ll dig into why modular designs (like Micro-Frontends) are the key to making AI-ready web apps, what skills frontend devs need to pick up right now, and how to work with AI instead of getting left behind.\n---\n\nFull schedule, including slides and other resources: \nhttps://pretalx.devconf.info/devconf-cz-2025/schedule/",
+    "publishedAt": "2025-06-26T08:15:31Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/WlO8JOBi_ks/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/WlO8JOBi_ks/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/WlO8JOBi_ks/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/WlO8JOBi_ks/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/WlO8JOBi_ks/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "4cKRbPIdxuc",
+    "title": "Micro Frontends Conference 2024 - Shelly Goldblit & Daniel Ostrovsky: Cross-Framework Testing in MFs",
+    "description": "Talk recording from the most important conference and event for the Micro Frontends community. Understand the latest trends in Micro Frontends architecture and development. See how and why distributed frontends are implemented in the real world. Get in depth knowledge around topics concerning Micro Frontends. Meet those who shape the present and the future of the Micro Frontends community.\n\nAbstract:\nEver wondered how to maintain consistent UI testing across different frameworks in a micro frontend setup? Our talk will guide you through the process of creating UI End-To-End & component testing for an application built with both React and Angular frameworks. Discover how to design framework-agnostic tests that enhance development flexibility and efficiency. \n\nAbout the speakers:\nShelly is an enthusiastic software engineer, with passion for software development, innovation and cutting edge technologies. Passionate about TDD and clean code. Over 25+ year of experience: software engineering & architecture, development management, process improvement, training, change management, InnerSource community management & gamification.\n\nDaniel is a web development (full cycle) expert and teams manager with over twenty years of experience in the industry. Meetup organizer - 'NG-Heroes'. Volunteer at Tech-Career, nonprofit organisation which target to attain and advance professional careers In Israel's High-Tech for Ethiopian Israeli young adults. He is passionate about his family, about his gorgeous wife and his adorable kids. In his free time, he is '**The Best Developer in The World**' *based on my wife's ranking*.\n\nProudly presented by Piral.Cloud - the ultimate production-grade Micro Frontends discovery service: https://www.piral.cloud/\n\nInterested in learning more? Check out the conference workshops at https://conference.microfrontends.cloud/2024/workshops or general workshops at https://workshops.microfrontends.cloud/\n\n#microfrontends #conference #cloud #community #scalable #webdev",
+    "publishedAt": "2024-07-15T08:00:07Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/4cKRbPIdxuc/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/4cKRbPIdxuc/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/4cKRbPIdxuc/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/4cKRbPIdxuc/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/4cKRbPIdxuc/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "DyaYw_NdYEM",
+    "title": "Micro-Frontend Architecture and Module Federation | Daniel Ostrovsky | Angular Tiny Conf 2023",
+    "description": "The micro-frontend architecture is attracting more and more developers, and module federation is a great addition to this architectural pattern. And as with any new technology, new questions are raised. \n\nLet's take real-life examples and live coding to answer the following but not limited to: how we should divide apps and whether there are specific criteria to separate them. \n\nIs my project suitable for the Micro-Frontend at all? When should I use Micro-Frontend and when Module Federation? And some other questions.\n\n----------------------------------------------------------------------------------------------------------------------\n\nAbout Angular Tiny Conf\n\nAngular is the beloved framework to thousands of developers around the world and has lately been moving at a very fast pace.\n\nThe Angular Tiny Conference is a quarterly one-day online event aiming to share all of the amazing ways individuals and teams are using not only the latest and greatest features, but also to celebrate the hard-won victories as a testimony to the longevity and health of the platform.\n\nFind out more at: https://angulartinyconf.com\n\nThank you to our sponsor Techlabs 28 (https://techlabs28.com) your premier provider for full stack Angular applications. Have the next big idea or need help with an existing project, please get in touch. \nAt Techlabs 28 We simply take care of IT",
+    "publishedAt": "2023-05-05T14:22:40Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/DyaYw_NdYEM/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/DyaYw_NdYEM/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/DyaYw_NdYEM/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/DyaYw_NdYEM/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/DyaYw_NdYEM/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "7cgj2xvY0y8",
+    "title": "Panel Discussion: Modern Software Architecture",
+    "description": "",
+    "publishedAt": "2024-04-10T08:18:38Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/7cgj2xvY0y8/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/7cgj2xvY0y8/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/7cgj2xvY0y8/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/7cgj2xvY0y8/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/7cgj2xvY0y8/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "bxWpxbqxTO0",
+    "title": "Daniel Ostrovsky: Is Qwik Really the World's First O1 JS framework?",
+    "description": "",
+    "publishedAt": "2024-04-10T08:18:44Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/bxWpxbqxTO0/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/bxWpxbqxTO0/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/bxWpxbqxTO0/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/bxWpxbqxTO0/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      }
+    }
+  },
+  {
+    "id": "xCsnRQOScrQ",
+    "title": "Typescript meta programming from 0 to 100 | Daniel Ostrovsky | ng-conf 2022",
+    "description": "When applications are getting bigger, some tools and features that help to manage this increasing complexity become more required. Let’s check some of these features: composition/dependency Injection, runtime type assertions, reflection/mirroring and more, and see how we can use it in live coding session.\n\nng-conf is a multi-day Angular conference focused on delivering the highest quality training in the Angular JavaScript framework. 1500+ developers from across the globe converge on Salt Lake City, UT every year to attend talks and workshops by the Angular team and community experts.\n\nFollow us on twitter https://twitter.com/ngconf\nOfficial Website: https://www.ng-conf.org/",
+    "publishedAt": "2023-01-30T14:00:35Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/xCsnRQOScrQ/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/xCsnRQOScrQ/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/xCsnRQOScrQ/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/xCsnRQOScrQ/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/xCsnRQOScrQ/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "0242Z5sejWI",
+    "title": "TypeScript Meta-Programming from 0 to 100 | Daniel Ostrovsky | Angular Tiny Conf Peret 2022",
+    "description": "When applications are getting bigger, some tools and features that help to manage this increasing complexity become more required. Let's check some of these features: composition/dependency Injection, runtime type assertions, reflection/mirroring and more, and see how we can use it in live coding session.\n\n-----------------------\n\n**Daniel Ostrovsky**\n*_Web Dev Lead at GeoEdge_*\n\nWeb development (Full Cycle) expert and teams manager with over twenty years of experience in the industry.\nMeetup organizer - \"NG-Heroes\". Volunteer at Tech-Career, nonprofit organization which target to attain and advance professional careers In Israel’s High-Tech for Ethiopian Israeli young adults.\n\nI'm passionate about family, about my gorgeous wife and my adorable kids. In my free time, I'm \"**The Best Developer in The World**\" *based on my wife's ranking*.\n\nTwitter: https://twitter.com/danduh81\nBlog: https://medium.com/@danduh (blog)\nLinkedIn: https://linkedin.com/in/danduh/\n\n--------------------\n\nThe Angular Tiny Conference is a twice a year online event aiming to share all of the amazing ways individuals and teams are using not only the latest and greatest features, but also to celebrate the hard won victories as a testimony to the longevity and health of the platform.\n\nEven though we will strive to have seasoned speakers in our lineup, we have made it a commitment to be a launching pad for first time speakers also. \n\n*To find out more:*\nFollow us on twitter: https://twitter.com/angulartinyconf\nOfficial website: https://angulartinyconf.com/",
+    "publishedAt": "2023-03-02T16:28:01Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/0242Z5sejWI/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/0242Z5sejWI/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/0242Z5sejWI/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/0242Z5sejWI/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/0242Z5sejWI/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "c_0Zu851CDQ",
+    "title": "Daniel Ostrovsky - Full Stack is dead, long live the Full Cycle! \"VinnytsiaJS - Online Thursday #5\"",
+    "description": "Join to Discord Chat: https://discord.gg/euzddDk\n\nFull Stack is dead, long live the Full Cycle! - Daniel Ostrovsky\n\nWhen “time to market” is critical. When bug fixing on production can’t take longer than a couple of hours. And it doesn’t matter if we are talking about a large company or a small startup, a new reality more often requires developers/teams to be a “Full Cycle”, - design, development, test, deploy, operate, and support.\n\nLet’s talk about the past, present and why ‘Full Cycle’ is a future of Web Development.\n\nI think it’s highly important to stay tuned not only with the latest development technologies and trends but also with latest development models.\n\nFollow Us:\nhttp://vinnytsiajs.org/\nhttps://t.me/vinjs\nhttps://www.facebook.com/VinnytsiaJS/\nhttps://www.instagram.com/vinnytsiajs/\nhttps://twitter.com/VinnytsiaJS",
+    "publishedAt": "2020-12-14T22:59:46Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/c_0Zu851CDQ/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/c_0Zu851CDQ/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/c_0Zu851CDQ/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/c_0Zu851CDQ/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/c_0Zu851CDQ/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "DLYpXET1TrM",
+    "title": "How to adopt UX/UI in Angular application according to user’s permissions.",
+    "description": "In many projects, there are authentication processes (more or less). Many “best practices” were written in all known technologies, and so on and so forth.\n\nBut what happens after the user makes the login? After all, he, by far, cannot do everything. How to define what he can see and what he cannot. What buttons he has the right to click on, and what to change, create and delete.\n\nIn this talk, I want to consider the approach to solving these problems in a web application.",
+    "publishedAt": "2023-03-26T18:35:23Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/DLYpXET1TrM/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/DLYpXET1TrM/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/DLYpXET1TrM/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/DLYpXET1TrM/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/DLYpXET1TrM/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "4sUUDccMsWw",
+    "title": "Typescript Meta-Programming from 0 to 100",
+    "description": "When applications become more prominent, some tools and features that help manage this increasing complexity become more required. Let's check some of these features: composition/dependency Injection, runtime type assertions, reflection/mirroring, and more, and see how we can use them in live coding sessions.\n\nhttps://twitter.com/danduh81\nhttps://github.com/danduh\nhttps://danduh.me\n\n(0:00) Introduction\n(0:30) Decorator\n(2:31) Who am I\n(4:17) What is metaprogramming\n(5:08) Bad practices in metaprogramming - dangers\n(10:25) Coding: basic typescript decorators\n(14:14) Coding: Typescript dependency injection\n(33:58) Final words",
+    "publishedAt": "2023-01-05T12:10:13Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/4sUUDccMsWw/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/4sUUDccMsWw/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/4sUUDccMsWw/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/4sUUDccMsWw/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/4sUUDccMsWw/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "JJOipy9O8Yw",
+    "title": "Get to Know the 2022 ng-conf Speakers | Daniel Ostrovsky | ng-conf 2022",
+    "description": "Get to Know the 2022 ng-conf Speakers | Daniel Ostrovsky\n\nFrom the Angular team to the ng-conf speakers & organizers, we’ve got you an all access pass to our series, “Get to Know…” In this series, Joe Eames sits down with those who make ng-conf the premier place for the angular community to gather.\nng-conf is a multi-day Angular conference focused on delivering the highest quality training in the Angular JavaScript framework. 1500+ developers from across the globe converge on Salt Lake City, UT every year to attend talks and workshops by the Angular team and community experts.\n\nJoin the Angular Community: http://www.ng-conf.org/\nGet your ng-conf tickets: https://ti.to/ng-conf\nFollow Us: https://twitter.com/ngconf\nLearn More: https://ng-conf-school.teachable \nRead More: https://medium.com/ngconf \nHear More: http://theangularshow.com \nFollow us on twitter https://twitter.com/ngconf\nOfficial Website: https://www.ng-conf.org/",
+    "publishedAt": "2022-05-30T17:00:20Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/JJOipy9O8Yw/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/JJOipy9O8Yw/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/JJOipy9O8Yw/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/JJOipy9O8Yw/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/JJOipy9O8Yw/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "NJdyVmmqvGw",
+    "title": "Typescript Meta-Programming from 0 to 100 - Daniel Ostrovsky",
+    "description": "Typescript Meta-Programming from 0 to 100.\nWhen applications are getting bigger, some tools and features that help to manage this increasing complexity become more required. Let's check some of these features: composition/dependency Injection, runtime type assertions, reflection/mirroring and more, and see how we can use it in live coding session.\n\nBio\nWeb development (Full Cycle) expert and teams manager with over twenty years of experience in the industry. Meetup organizer - \"NG-Heroes\". Volunteer at Tech-Career, nonprofit organisation which target to attain and advance professional careers In Israel’s High-Tech for Ethiopian Israeli young adults. I'm passionate about family, about my gorgeous wife and my adorable kids. In my free time, I'm \"**The Best Developer in The World**\" *based on my wife's ranking*.",
+    "publishedAt": "2022-11-14T09:35:42Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/NJdyVmmqvGw/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/NJdyVmmqvGw/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/NJdyVmmqvGw/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/NJdyVmmqvGw/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/NJdyVmmqvGw/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "WbB0uSJ84Tk",
+    "title": "Special Angular-IL Meetup with Michael Hladky | 19.8.20",
+    "description": "Save the date for a special meetup with Nir Kaufman, Daniel Ostrovsky aaaand..... Michael Hladky!!\n\nDaniel Ostrovsky\nFull-Stuck RunTime type validation\n---------\nHow to ensure type validation of data coming from external sources? \n\n“Runtime boundaries type validation” or “full stuck type-safe”, - all this talking about the ability to validate types of data coming from external sources. It can be any API or WebHook Call, third-part form validation, DB queries results or file content (such as JSON or CSV). Let’s see how can we define runtime types for the expected data, that can be validated while the application is running, to create a smooth developer experience with strong assurances of correctness at build-time.\n\n\nMichael Hladky\nFully Zone-Less - High-Performance Angular applications in post IVY\n---------\nThe async pipe is boring! \n\nUnderstand the guts of Angulars change detection and why zone.js is your biggest enemy.\nLearn the trick on template bindings, component rendering, and where you pay the biggest price.\n\nAs the tip of the iceberg, you will learn how to identify and avoid blocking UIs by analyzing flame charts and leverage task scheduling.\n\nIn the end, you will be able to build applications with zone-less performance even in a zone-full environment. \n\n\nNir Kaufman\n15 minutes of Angular - Patterns & Techniques\n---------\nLet's learn something new! Each session I will dive into an Angular feature, technique, or API. I'll focus on understanding the problem, and how to come up with a practical solution - the Angular way :)\nTips and best-practices included.\n\n\nAt the end of the meetup we will raffle 2 Jetbrains Licenses and a free ticket to AngularUP!",
+    "publishedAt": "2020-08-19T17:49:38Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/WbB0uSJ84Tk/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/WbB0uSJ84Tk/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/WbB0uSJ84Tk/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/WbB0uSJ84Tk/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      }
+    }
+  },
+  {
+    "id": "y0T9IRo-7zo",
+    "title": "[LIVE] OdessaJS 2020 - Online Day Speeches",
+    "description": "TIMECODES:\n     0:00    Start\n     8:39    🇺🇦Conference Online Opening\n   28:01    🇬🇧Moving from JavaScript to ReasonML      👤VLADIMIR NOVICK\n1:13:25    🇬🇧React Native: Awesome Offline apps with GraphQL     👤VILVA ATHIBAN P.B. \n2:04:41    🇷🇺Fall in Love With JS Decorators     👤DANIEL OSTROVSKY\n2:56:27    🇷🇺Flutter for Web developers     👤EVGENY KOT\n3:42:28    🇷🇺/ 🇬🇧Speakers' Panel Discussion.\n4:17:14    🇬🇧Testing in Production - A Practical Overview With Live Examples     👤YONI GOLDBERG\n5:00:50    🇬🇧Winning the Telegram Web App contest     👤ALEKSANDR ZINCHUK\n5:58:48    🇷🇺What about Biometric and U2F Token Web Authentication?     👤DENIS ZAVGORODNY\n6:51:09    🇬🇧Kube Restaurant     👤JOEL LORD\n7:48:13    🇷🇺Deep dive in to effector     👤IAN LAVRIUSHEV\n8:23:41    🇬🇧GIF is dead. Who's next?     👤ALEKSANDR KOROTAEV\n9:14:24    🇺🇦Closing\n\n--------------------------------------------\n\nJOIN US:\nFacebook: https://www.facebook.com/odessajs/\nTwitter: https://twitter.com/odessajs\nInstagram: https://www.instagram.com/odessajsconf/\nTelegram: https://t.me/odessajs",
+    "publishedAt": "2020-08-22T17:32:20Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/y0T9IRo-7zo/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/y0T9IRo-7zo/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/y0T9IRo-7zo/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/y0T9IRo-7zo/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/y0T9IRo-7zo/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "syI0ve6k0VE",
+    "title": "FrontEnd + DevOps = ❤️ (Free Online Workshop 1 of 3)",
+    "description": "Session #1 will cover the following topics:\n- What is DevOps (some history)\n- Why we (FrontEnd developers) should care\n- Intro into the World of Containers\n- Hello World - Docker\n- Serve our static build from Docker\n\n*** Prerequisite:\n1) Machine with Docker installed:\n- macOS https://docs.docker.com/docker-for-ma...\n- Linux-based: https://runnable.com/docker/install-d...\n- Windows: https://docs.docker.com/docker-for-wi...\n2) Docker Hub account: https://hub.docker.com/signup\n3) A good mood and willing to learn.",
+    "publishedAt": "2020-03-27T10:36:50Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/syI0ve6k0VE/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/syI0ve6k0VE/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/syI0ve6k0VE/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/syI0ve6k0VE/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      }
+    }
+  },
+  {
+    "id": "s25Og6haazs",
+    "title": "Web Development meets DevOps. Session #1 (HEB)",
+    "description": "The number of manuals/tutorials on how to start programming in Angular / React / VueJs rolls over.\n\nAfter we have developed our great, highly innovative and extremely useful application, what's next? How to show it to the world without spending too much money? Instances, serverless or static websites? What tools are available for Continuous Integration/Delivery? And what about SEO? How does Google crawl a single page app? Does new evergreen-googlebot make our life easier?\nServer-Side rendering VS Pre-Rendering? Or is there another option?\n\nWe will take some prebuilt app and deliver it to the world, by answering all the questions above.\n\n*********************\nSession #1 will cover the following topics:\n*********************\n- What is DevOps (some history)\n- Why we (FrontEnd developers) should care\n- Intro into the World of Containers\n- Hello World - Docker\n- Serve our static build from Docker\n\n||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n*** Prerequisite:\n1) Machine with Docker installed:\n- macOS https://docs.docker.com/docker-for-mac/install/\n- Linux-based: https://runnable.com/docker/install-docker-on-linux\n- Windows: https://docs.docker.com/docker-for-windows/install/\n2) Docker Hub account: https://hub.docker.com/signup\n3) A good mood and willing to learn.\n\nhttps://github.com/danduh/web-devops-workshop",
+    "publishedAt": "2020-02-07T19:57:34Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/s25Og6haazs/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/s25Og6haazs/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/s25Og6haazs/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/s25Og6haazs/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/s25Og6haazs/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "es3_l3Xt0kQ",
+    "title": "TS-Conf - Fall in love with TypeScript decorators",
+    "description": "Here is a video of my talk from TS-Conf (Oct-2019).\nGoogle Slides: https://docs.google.com/presentation/d/1b5rPEaumNUEmh361he_mYnbLrpZniAtRl0JapGtigjc/edit?usp=sharing\n\n\nDecorators is one of the most underrated features in TS. At the same time is one of the most life-changing features. Once you get it your life will never be the same. We will start from basics definitions and go all the way to advanced real-life examples and use cases.\n\nDecorators are incredibly cool. They allow you to describe meta data directly in the class declaration, grouping everything in one place and avoiding duplication. Terribly addictive. Once having tried, you will use it forever However the decorators in TypeScript are not as simple as we would like. Working with them requires some skills.\nIn this talk we will try to cover:\nPrologue\nDecorators in TC39 stage 2. meaning and when to expect.\nBabel\nFrameworks uses decorators (Angular, NestJS, MobiX…)\nIntro\nDescriptor and why it’s matter\nSimple logger decorator (live-coding)\nMethod decorator\nRun time\nValidators (live-coding)\nmemoize (livecoding)\nMethod’s param decorator\nWhy it’s so cool\nReal life examples (livecoding)\nClass Decorators (livecoding)\nClass Composition\nClass mixing\nAdvances (optionally)\nReflection, metadata\nUse cases and examples (livecoding)\nA coding is worth a thousand words….",
+    "publishedAt": "2019-10-27T12:27:39Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/es3_l3Xt0kQ/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/es3_l3Xt0kQ/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/es3_l3Xt0kQ/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/es3_l3Xt0kQ/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/es3_l3Xt0kQ/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "qMsOzA1oPYI",
+    "title": "Jump Into Metaprogramming with ES6 (Hebrew)",
+    "description": "On 26/3/19, Daniel Ostrovsky gave a lecture about Metaprogramming during a JavaScript Israel Meetup.\n\nAbstract:\nMetaprogramming is entire world of programming, in new ES6 we have set of great new features which provides low level hooks into code mechanics.\nLet's touch a tip of the iceberg!\nWe will talk about the definition of \"Metaprogramming\": some best and some bad practices.\nAnd of course, - coding\nWe will go over:\nObject Property Descriptor\nDecorators (functions / methods and class)\n\n\n\nEvent Page:http://meetu.ps/e/GvynV/spJJ8/d\n\nThanks to our Gold sponsors : MinuteMedia\nAnd our Silver sponsors : Whitesource\n\nJoin the group:\nhttp://www.meetup.com/JavaScript-Israel\n\n\nVideo By: http://www.artcore.media",
+    "publishedAt": "2019-05-15T10:21:10Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/qMsOzA1oPYI/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/qMsOzA1oPYI/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/qMsOzA1oPYI/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/qMsOzA1oPYI/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/qMsOzA1oPYI/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "BqOKhIDrmoc",
+    "title": "Daniel Ostrovsky - Adopting UX/UI to user permissions",
+    "description": "",
+    "publishedAt": "2019-11-11T15:24:58Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/BqOKhIDrmoc/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/BqOKhIDrmoc/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/BqOKhIDrmoc/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/BqOKhIDrmoc/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/BqOKhIDrmoc/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "X12V8m7CT0s",
+    "title": "Metaprogramming Part 2 - Class Decorators (Hebrew)",
+    "description": "On 29/5/19, Daniel Ostrovsky gave a lecture about Class Decorators during a JavaScript Israel Meetup.\n\nAbstract:\nDecorators are part of proposal TC39 (stage 2), this means that sooner or later decorators will become a part of the JS.\nHowever, there is no need to wait! We can use decorators in TypeScript or with babel.\nLet's see how decorators can be used in metaprogramming and class composition, which gives you more flexibility by composing functionality to create new classes.\n\n\nEvent Page http://meetu.ps/e/GLQWn/spJJ8/d\n\nThanks to our Gold sponsors : MinuteMedia\nAnd our Silver sponsors : Whitesource\n\nJoin the group:\nhttp://www.meetup.com/JavaScript-Israel\n\n\nVideo By: http://www.artcore.media",
+    "publishedAt": "2019-07-01T05:56:09Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/X12V8m7CT0s/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/X12V8m7CT0s/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/X12V8m7CT0s/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/X12V8m7CT0s/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/X12V8m7CT0s/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "zEYuDqF5dZU",
+    "title": "Falling in love with decorators ES6/TypeScript. Daniel Ostrovsky. JS Fest 2019 Autumn",
+    "description": "The talk from JS Fest conference 2019 Autumn in Kyiv, Ukraine.\n\nPresentation: http://bit.ly/34YDTzO \nFb: https://www.facebook.com/JSFestua/ \nWebsite: https://jsfest.com.ua\n\nUpcoming JS Conference:\nJS Fest 2020 - 30-31st of October, Kyiv, Ukraine\nDetails and tickets: https://bit.ly/3bBxiiK",
+    "publishedAt": "2020-02-10T09:16:47Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/zEYuDqF5dZU/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/zEYuDqF5dZU/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/zEYuDqF5dZU/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/zEYuDqF5dZU/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/zEYuDqF5dZU/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  },
+  {
+    "id": "-tI14R-LB1E",
+    "title": "Custom Angular Decorators",
+    "description": "Angular custom decorators - Daniel Ostrovsky\n\n@Componet(), @Injectable(), @Input() and even @NgModule() - just a functions…\nI want to show how to create your own very useful decorators, that will save your time and will make your code cleaner and more readable.\n\nHere is the repository with custom decorators:\nhttps://github.com/danduh/ngx-custom-decorators\n\nFeel free to contribute/open tickets / add ideas!!!\nLet's create a cool and powerful library of decorators for any JS/TS framework!",
+    "publishedAt": "2019-11-27T10:14:35Z",
+    "thumbnails": {
+      "default": {
+        "url": "https://i.ytimg.com/vi/-tI14R-LB1E/default.jpg",
+        "width": 120,
+        "height": 90
+      },
+      "medium": {
+        "url": "https://i.ytimg.com/vi/-tI14R-LB1E/mqdefault.jpg",
+        "width": 320,
+        "height": 180
+      },
+      "high": {
+        "url": "https://i.ytimg.com/vi/-tI14R-LB1E/hqdefault.jpg",
+        "width": 480,
+        "height": 360
+      },
+      "standard": {
+        "url": "https://i.ytimg.com/vi/-tI14R-LB1E/sddefault.jpg",
+        "width": 640,
+        "height": 480
+      },
+      "maxres": {
+        "url": "https://i.ytimg.com/vi/-tI14R-LB1E/maxresdefault.jpg",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  }
+]
