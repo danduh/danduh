@@ -6,25 +6,129 @@
 
 /* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  --ifm-color-primary: #1173d4;
+  --ifm-color-primary-dark: #0e66c2;
+  --ifm-color-primary-darker: #0c5fb8;
+  --ifm-color-primary-darkest: #0a4f9e;
+  --ifm-color-primary-light: #2684e6;
+  --ifm-color-primary-lighter: #3a8fe8;
+  --ifm-color-primary-lightest: #5ba0ea;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
+  --ifm-color-primary: #1173d4;
+  --ifm-color-primary-dark: #0e66c2;
+  --ifm-color-primary-darker: #0c5fb8;
+  --ifm-color-primary-darkest: #0a4f9e;
+  --ifm-color-primary-light: #2684e6;
+  --ifm-color-primary-lighter: #3a8fe8;
+  --ifm-color-primary-lightest: #5ba0ea;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Portfolio specific styles */
+.portfolio-hero {
+  background: var(--ifm-background-color);
+  color: var(--ifm-color-emphasis-900);
+}
+
+[data-theme='dark'] .portfolio-hero {
+  background: #111827;
+  color: #f3f4f6;
+}
+
+.portfolio-section {
+  padding: 6rem 2.5rem;
+  text-align: center;
+}
+
+.portfolio-avatar {
+  width: 10rem;
+  height: 10rem;
+  border-radius: 50%;
+  background: center / cover no-repeat;
+  margin: 0 auto 1.5rem;
+  background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBbAopdikaqNjz1joaQCcPx1nbVOgzQfKSyP0lgoDqVmrBaZVg7PQ81Xez_3qsX6YvorB8ymLsl98S7SfH_03RKtqiHPOGDRoFFkIgrW-cRb68CqT_wG5PNe3A-oGA_j9NU1boGhZGxhTmNV-omBP5uI6omF1RlaQ-f6cyjb78vLTIx29xWGT_vkb1tvpaylut6U7fCs78T_sbCrrz72O32PFWNPX4fPOOV5zsDPbHAM6YgNSKb0yeG6ASNuvOLGWMxeUmdVbZ8U0Cq");
+}
+
+.portfolio-title {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  margin-bottom: 1rem;
+}
+
+.portfolio-subtitle {
+  font-size: 1.25rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 1.5rem;
+}
+
+.portfolio-description {
+  max-width: 42rem;
+  margin: 0 auto 2rem;
+  font-size: 1.125rem;
+  color: var(--ifm-color-emphasis-500);
+  line-height: 1.75;
+}
+
+.portfolio-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.portfolio-button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  padding: 0 1.5rem;
+  background: var(--ifm-color-primary);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  transition: background-color 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.portfolio-button-primary:hover {
+  background: #0e66c2;
+}
+
+.portfolio-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  padding: 0 1.5rem;
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  transition: background-color 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.portfolio-button-secondary:hover {
+  background: var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .portfolio-button-secondary {
+  background: #374151;
+  color: #f3f4f6;
+}
+
+[data-theme='dark'] .portfolio-button-secondary:hover {
+  background: #4b5563;
 }

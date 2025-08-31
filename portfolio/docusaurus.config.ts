@@ -5,8 +5,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'My Site',
-  tagline: 'Dinosaurs are cool',
+  title: 'Daniel Ostrovsky',
+  tagline: 'UI & AI Architect',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -73,22 +73,60 @@ const config: Config = {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
-      title: 'My Site',
+      title: 'Daniel Ostrovsky',
       logo: {
-        alt: 'My Site Logo',
+        alt: 'Daniel Ostrovsky Logo',
         src: 'img/logo.svg',
       },
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
+          to: '/videos',
+          label: 'Videos',
           position: 'left',
-          label: 'Tutorial',
         },
-        {to: '/blog', label: 'Blog', position: 'left'},
         {
-          href: 'https://github.com/facebook/docusaurus',
+          to: '/articles',
+          label: 'Articles',
+          position: 'left',
+        },
+        {
+          to: '/conferences',
+          label: 'Conferences',
+          position: 'left',
+        },
+        {
+          to: '/projects',
+          label: 'GitHub Projects',
+          position: 'left',
+        },
+        {
+          to: '/contact',
+          label: 'Contact',
+          position: 'left',
+        },
+        {
+          href: 'https://www.linkedin.com/in/danduh/',
+          label: 'LinkedIn',
+          position: 'right',
+        },
+        {
+          href: 'https://medium.com/@danduh',
+          label: 'Medium',
+          position: 'right',
+        },
+        {
+          href: 'https://github.com/danduh',
           label: 'GitHub',
+          position: 'right',
+        },
+        {
+          href: 'https://linktr.ee/danduh',
+          label: 'Linktree',
+          position: 'right',
+        },
+        {
+          href: 'https://www.youtube.com/@danduh81',
+          label: 'YouTube',
           position: 'right',
         },
       ],
@@ -97,46 +135,53 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Navigation',
           items: [
             {
-              label: 'Tutorial',
-              to: '/docs/intro',
+              label: 'Home',
+              to: '/',
+            },
+            {
+              label: 'Videos',
+              to: '/videos',
+            },
+            {
+              label: 'Articles',
+              to: '/articles',
+            },
+            {
+              label: 'Conferences',
+              to: '/conferences',
+            },
+            {
+              label: 'GitHub Projects',
+              to: '/projects',
+            },
+            {
+              label: 'Contact',
+              to: '/contact',
             },
           ],
         },
         {
-          title: 'Community',
+          title: 'Social',
           items: [
             {
-              label: 'Stack Overflow',
-              href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+              label: 'Twitter',
+              href: 'https://twitter.com/danielostrovsky',
             },
             {
-              label: 'Discord',
-              href: 'https://discordapp.com/invite/docusaurus',
-            },
-            {
-              label: 'X',
-              href: 'https://x.com/docusaurus',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'Blog',
-              to: '/blog',
+              label: 'LinkedIn',
+              href: 'https://linkedin.com/in/danielostrovsky',
             },
             {
               label: 'GitHub',
-              href: 'https://github.com/facebook/docusaurus',
+              href: 'https://github.com/danielostrovsky',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+      copyright: `© ${new Date().getFullYear()} Daniel Ostrovsky. All rights reserved.`,
     },
     prism: {
       theme: prismThemes.github,

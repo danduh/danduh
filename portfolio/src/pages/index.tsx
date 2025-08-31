@@ -1,43 +1,39 @@
 import type {ReactNode} from 'react';
-import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
-import Heading from '@theme/Heading';
-
-import styles from './index.module.css';
-
-function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <header className={clsx('hero hero--primary', styles.heroBanner)}>
-      <div className="container">
-        <Heading as="h1" className="hero__title">
-          {siteConfig.title}
-        </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
-        <div className={styles.buttons}>
-          <Link
-            className="button button--secondary button--lg"
-            to="/docs/intro">
-            Docusaurus Tutorial - 5min ⏱️
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
 
 export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title={`Hello from ${siteConfig.title}`}
-      description="Description will go into a meta tag in <head />">
-      <HomepageHeader />
-      <main>
-        <HomepageFeatures />
+      title={siteConfig.title}
+      description="UI & AI Architect specializing in crafting intuitive user interfaces and intelligent systems">
+      <main className="portfolio-hero">
+        <section className="portfolio-section">
+          <div className="container">
+            <div className="portfolio-avatar"></div>
+            <h1 className="portfolio-title">{siteConfig.title}</h1>
+            <p className="portfolio-subtitle">{siteConfig.tagline}</p>
+            <p className="portfolio-description">
+              I specialize in crafting intuitive user interfaces and intelligent systems.
+              My work is at the intersection of design and artificial intelligence,
+              creating seamless and engaging user experiences.
+            </p>
+            <div className="portfolio-buttons">
+              <Link
+                className="portfolio-button-primary"
+                to="/projects">
+                View Projects
+              </Link>
+              <Link
+                className="portfolio-button-secondary"
+                to="/contact">
+                Get in Touch
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
     </Layout>
   );
