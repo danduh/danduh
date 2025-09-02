@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import Layout from '@theme/Layout';
 import videosData from '@site/src/data/videos.json';
 import styles from '../css/videos.module.css';
+import { Analytics, useEnhancedAnalyticsPageTracking, AnalyticsLink } from "../components/Analytics";
 
 interface Video {
   id: string;
@@ -34,6 +35,9 @@ const getCategoryFromTitle = (title: string): 'talks' | 'tutorials' | 'demos' =>
 };
 
 export default function Videos(): React.ReactNode {
+  // Enhanced analytics tracking for videos page
+  const analyticsComponents = useEnhancedAnalyticsPageTracking();
+
   const videos: Video[] = useMemo(() => {
     return (videosData as Video[]).map(video => ({
       ...video,
@@ -42,6 +46,17 @@ export default function Videos(): React.ReactNode {
   }, []);
   
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('all');
+
+  // Track filter usage
+  const handleFilterChange = (filter: FilterCategory) => {
+    setActiveFilter(filter);
+    Analytics.trackEvent('filter_change', {
+      event_category: 'videos',
+      event_label: filter,
+      custom_parameter_2: 'videos',
+      value: 1,
+    });
+  };
 
   // Filter videos based on the active filter
   const filteredVideos = useMemo(() => {
@@ -55,6 +70,7 @@ export default function Videos(): React.ReactNode {
     <Layout
       title="Videos"
       description="Watch my latest videos, talks, and tutorials">
+      {analyticsComponents}
       <main className={styles['videos-page']}>
         <div className={styles['videos-container']}>
           <div className={styles['videos-header']}>
@@ -68,25 +84,25 @@ export default function Videos(): React.ReactNode {
             <div className={styles['filter-buttons']}>
               <button 
                 className={`${styles['filter-button']} ${activeFilter === 'all' ? styles.active : ''}`}
-                onClick={() => setActiveFilter('all')}
+                onClick={() => handleFilterChange('all')}
               >
                 All
               </button>
               <button 
                 className={`${styles['filter-button']} ${activeFilter === 'talks' ? styles.active : ''}`}
-                onClick={() => setActiveFilter('talks')}
+                onClick={() => handleFilterChange('talks')}
               >
                 Talks
               </button>
               <button 
                 className={`${styles['filter-button']} ${activeFilter === 'tutorials' ? styles.active : ''}`}
-                onClick={() => setActiveFilter('tutorials')}
+                onClick={() => handleFilterChange('tutorials')}
               >
                 Tutorials
               </button>
               <button 
                 className={`${styles['filter-button']} ${activeFilter === 'demos' ? styles.active : ''}`}
-                onClick={() => setActiveFilter('demos')}
+                onClick={() => handleFilterChange('demos')}
               >
                 Project Demos
               </button>
@@ -95,16 +111,33 @@ export default function Videos(): React.ReactNode {
 
           <div className={styles['video-grid']}>
             {filteredVideos.map((video) => (
-              <div key={video.id} className={styles['video-card']}>
+              <div key={video.id} className={styles['video-card']}
+                onClick={() => {
+                  Analytics.trackContentInteraction('video', video.title, 'view');
+                  Analytics.trackEvent('video_engagement', {
+                    event_category: 'videos',
+                    event_label: video.title,
+                    custom_parameter_2: video.category || 'uncategorized',
+                    value: 2,
+                  });
+                }}
+              >
                 <div className={styles['video-wrapper']}>
                   <iframe
-                    src={`https://www.youtube.com/embed/${video.id}`}
+                    src={`https://www.youtube.com/embed/${video.id}?enablejsapi=1`}
                     title={video.title}
                     frameBorder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     referrerPolicy="strict-origin-when-cross-origin"
                     allowFullScreen
                     className={styles['video-iframe']}
+                    onLoad={() => {
+                      Analytics.trackEvent('video_load', {
+                        event_category: 'performance',
+                        event_label: video.title,
+                        custom_parameter_2: 'video_performance',
+                      });
+                    }}
                   ></iframe>
                 </div>
                 <div className={styles['video-info']}>
