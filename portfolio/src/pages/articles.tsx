@@ -3,6 +3,7 @@ import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
 import mediumArticles from "../data/medium.json";
+import { useEnhancedAnalyticsPageTracking, AnalyticsLink, Analytics } from "../components/Analytics";
 
 interface Article {
   title: string;
@@ -32,6 +33,15 @@ function cleanExcerpt(excerpt: string): string {
 }
 
 function handleShare(title: string, url: string): void {
+  // Track share action
+  Analytics.trackContentInteraction('article', title, 'share');
+  Analytics.trackEvent('content_share', {
+    event_category: 'articles',
+    event_label: title,
+    custom_parameter_2: 'content_sharing',
+    value: 2,
+  });
+
   if (navigator.share) {
     navigator.share({
       title: title,
@@ -40,6 +50,12 @@ function handleShare(title: string, url: string): void {
   } else {
     // Fallback to copying to clipboard
     navigator.clipboard.writeText(url);
+    // Track clipboard copy
+    Analytics.trackEvent('clipboard_copy', {
+      event_category: 'articles',
+      event_label: 'share_fallback',
+      custom_parameter_2: 'content_sharing',
+    });
   }
 }
 
@@ -75,23 +91,38 @@ function ArticleCard({
           </div>
 
           <h2 className="article-title">
-            <a href={article.link} target="_blank" rel="noopener noreferrer">
+            <AnalyticsLink
+              href={article.link}
+              isExternal={true}
+              trackingData={{
+                category: 'articles',
+                label: `title_click_${article.title}`,
+                value: 2,
+              }}
+            >
               {article.title}
-            </a>
+            </AnalyticsLink>
           </h2>
 
           <p className="article-excerpt">{cleanExcerpt(article.excerpt)}</p>
         </div>
 
         <div className="article-footer">
-          <a
+          <AnalyticsLink
             href={article.link}
-            target="_blank"
-            rel="noopener noreferrer"
+            isExternal={true}
             className="read-more-btn"
+            trackingData={{
+              category: 'articles',
+              label: `read_more_${article.title}`,
+              value: 3,
+            }}
+            onClick={() => {
+              Analytics.trackContentInteraction('article', article.title, 'click');
+            }}
           >
             Read More
-          </a>
+          </AnalyticsLink>
           <button
             className="share-btn"
             onClick={() => handleShare(article.title, article.link)}
@@ -108,12 +139,16 @@ function ArticleCard({
 export default function Articles(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   const articles: Article[] = mediumArticles;
+  
+  // Enhanced analytics tracking for articles page
+  const analyticsComponents = useEnhancedAnalyticsPageTracking();
 
   return (
     <Layout
       title="Articles & Insights"
       description="A collection of my thoughts and writings on UI/UX design, artificial intelligence, and the future of technology."
     >
+      {analyticsComponents}
       <main className="portfolio-hero">
         <div className="articles-container">
           <div className="articles-header">

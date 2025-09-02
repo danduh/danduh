@@ -2,14 +2,25 @@ import type { ReactNode } from "react";
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
+import { Analytics, useEnhancedAnalyticsPageTracking, AnalyticsLink } from "../components/Analytics";
 
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
+  
+  // Enhanced analytics tracking for homepage
+  const analyticsComponents = useEnhancedAnalyticsPageTracking();
+
+  // Track homepage engagement
+  const handleHeroInteraction = (action: string) => {
+    Analytics.trackContentInteraction('project', 'homepage_hero', action as any);
+  };
+
   return (
     <Layout
       title={siteConfig.title}
       description="UI & AI Architect specializing in crafting intuitive user interfaces and intelligent systems"
     >
+      {analyticsComponents}
       <main className="portfolio-hero">
         <section className="portfolio-section">
           <div className="container">
@@ -45,12 +56,30 @@ export default function Home(): ReactNode {
               community.{" "}
             </p>
             <div className="portfolio-buttons">
-              <Link className="portfolio-button-primary" to="/projects">
+              <AnalyticsLink
+                href="/projects"
+                className="portfolio-button-primary"
+                trackingData={{
+                  category: 'homepage_cta',
+                  label: 'view_projects',
+                  value: 2,
+                }}
+                onClick={() => handleHeroInteraction('click')}
+              >
                 View Projects
-              </Link>
-              <Link className="portfolio-button-secondary" to="/contact">
+              </AnalyticsLink>
+              <AnalyticsLink
+                href="/contact"
+                className="portfolio-button-secondary"
+                trackingData={{
+                  category: 'homepage_cta',
+                  label: 'get_in_touch',
+                  value: 3,
+                }}
+                onClick={() => handleHeroInteraction('click')}
+              >
                 Get in Touch
-              </Link>
+              </AnalyticsLink>
             </div>
           </div>
         </section>
