@@ -21,3 +21,5 @@ yarn-debug.log*
 yarn-error.log*
 /portfolio/.env
 /.playwright-mcp
+
+.vscode/
