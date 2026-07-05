@@ -1,12 +1,12 @@
-# Daniel Ostrovsky | AI & Architecture Expert
+# Daniel Ostrovsky | AI Architect
 
 <div align="center">
 
-![Header](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=200&section=header&text=AI%20Architecture%20Expert&fontSize=50&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=Building%20Smart%20Applications%20with%20AI&descAlignY=55&descSize=18)
+![Header](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=200&section=header&text=AI%20Architect&fontSize=60&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=Agentic%20systems%20%E2%80%A2%20Evaluation%20%E2%80%A2%20Governance%20%E2%80%A2%20Fine-tuning&descAlignY=55&descSize=18)
 
-### *Building the Future with AI and Smart Architecture*
+### *Designing agentic systems that are reliable, evaluated, and safe to ship*
 
-**20+ years experience** | **AI Integration Specialist** | **Frontend Architecture** | **International Speaker**
+**20+ years in software** | **Agentic Systems at Scale** | **LLM Evaluation & Fine-Tuning** | **AI Governance & Compliance** | **International Speaker**
 
 [![Portfolio](https://img.shields.io/badge/🌐_Portfolio-danduh.me-blue?style=for-the-badge&logo=google-chrome&logoColor=white)](https://danduh.me)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-danduh-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/danduh/)
@@ -21,53 +21,67 @@
 
 > *"The Best Developer in The World"* - *based on my wife's ranking*
 
-I'm a **senior developer and architect** with 20+ years of experience building web applications. I help teams integrate AI into their products and create better frontend architectures.
+I'm an **AI Architect**. I design and ship AI systems that hold up in production — not demos. My work sits where the hard problems live: **agentic systems at scale**, **agent and LLM evaluation**, **AI compliance and governance**, and **fine-tuning models** for real workflows with real accountability.
 
-**What I work on:**
-- **AI Integration** - Adding smart features to web applications
-- **Micro-Frontends** - Building large applications with small, independent teams
-- **Modern Architecture** - Designing systems that are easy to maintain and scale
-- **Developer Tools** - Creating better workflows for development teams
-- **Cross-Platform Development** - Making applications work everywhere
+I think about AI the way an architect thinks about a building: what happens under load, what fails safely, what can be measured, and who owns it a year from now. That means multi-agent orchestration you can actually reason about, **evaluation harnesses** that catch regressions before users do, **guardrails and policy** baked into the system rather than bolted on, and **fine-tuned models** measured against clear baselines.
+
+I build on the **Model Context Protocol (MCP)** to connect agents to tools, data, and systems securely — and I've spent years proving that **JavaScript/TypeScript is a first-class language for serious AI engineering**, not just Python. Two decades of large-scale frontend and platform architecture is what lets me ship these systems end to end.
+
+**What I architect:**
+- **Agentic Systems at Scale** — multi-agent orchestration, planning, tool use, memory, and failure recovery
+- **Agent & LLM Evaluation** — eval harnesses, LLM-as-judge, regression suites, offline + online scoring
+- **AI Compliance & Governance** — guardrails, policy, auditability, safety, and responsible-AI controls
+- **LLM Fine-Tuning** — dataset curation, training, and rigorous before/after evaluation
+- **RAG & Knowledge Systems** — retrieval pipelines, GraphRAG, and grounding at scale
+- **MCP & AI Tooling** — secure, observable connections between agents and real systems
 
 **I believe:**
-- JavaScript is great for AI development (not just Python)
-- AI will change how we build user interfaces
-- Good architecture makes teams more productive
+- If you can't evaluate it, you can't ship it — evals are the architecture, not an afterthought
+- Compliance and safety are design constraints, not paperwork
+- Agentic systems live or die on observability and graceful failure
+- JavaScript/TypeScript is a first-class language for AI, not just Python
+- Good architecture is what makes AI reliable, scalable, and accountable
 
 ---
 
-## AI & Architecture Expertise
+## AI Architecture Expertise
 
 <div align="center">
 
-### **AI Development**
-![AI Integration](https://img.shields.io/badge/AI_Integration-00D4AA?style=flat-square&logo=openai&logoColor=white)
-![MCP](https://img.shields.io/badge/MCP_Servers-FF6B6B?style=flat-square&logo=protocol&logoColor=white)
-![LLM APIs](https://img.shields.io/badge/LLM_APIs-9C27B0?style=flat-square&logo=api&logoColor=white)
-![Prompt Engineering](https://img.shields.io/badge/Prompt_Engineering-FF5722?style=flat-square&logo=chatbot&logoColor=white)
-![Window.ai](https://img.shields.io/badge/Window.ai-4CAF50?style=flat-square&logo=google-chrome&logoColor=white)
+### **Agentic Systems**
+![Multi-Agent](https://img.shields.io/badge/Multi--Agent_Systems-00D4AA?style=flat-square&logo=openai&logoColor=white)
+![Orchestration](https://img.shields.io/badge/Agent_Orchestration-6E56CF?style=flat-square&logo=chainlink&logoColor=white)
+![Tool Use](https://img.shields.io/badge/Tool_Use_%26_Function_Calling-FF6B6B?style=flat-square&logo=protocol&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP_Servers-FF4081?style=flat-square&logo=protocol&logoColor=white)
+![Agent Memory](https://img.shields.io/badge/Agent_Memory-9C27B0?style=flat-square&logo=databricks&logoColor=white)
 
-### **Frontend Architecture**
-![Micro-Frontends](https://img.shields.io/badge/Micro--Frontends-FF4081?style=flat-square&logo=micro&logoColor=white)
-![Module Federation](https://img.shields.io/badge/Module_Federation-4285F4?style=flat-square&logo=webpack&logoColor=white)
-![System Design](https://img.shields.io/badge/System_Design-795548?style=flat-square&logo=architecture&logoColor=white)
-![Event-Driven](https://img.shields.io/badge/Event--Driven-E91E63?style=flat-square&logo=apache-kafka&logoColor=white)
-![Cross-Platform](https://img.shields.io/badge/Cross--Platform-607D8B?style=flat-square&logo=flutter&logoColor=white)
+### **Evaluation & Reliability**
+![Evals](https://img.shields.io/badge/LLM_%26_Agent_Evals-0EA5E9?style=flat-square&logo=testinglibrary&logoColor=white)
+![LLM-as-Judge](https://img.shields.io/badge/LLM--as--Judge-8B5CF6?style=flat-square&logo=scale&logoColor=white)
+![Observability](https://img.shields.io/badge/AI_Observability-F59E0B?style=flat-square&logo=grafana&logoColor=white)
+![Guardrails](https://img.shields.io/badge/Guardrails-EF4444?style=flat-square&logo=shield&logoColor=white)
+![Regression Suites](https://img.shields.io/badge/Regression_Testing-10B981?style=flat-square&logo=pytest&logoColor=white)
 
-### **TypeScript & Advanced Patterns**
+### **Models & Training**
+![Fine-Tuning](https://img.shields.io/badge/LLM_Fine--Tuning-FF5722?style=flat-square&logo=pytorch&logoColor=white)
+![RAG](https://img.shields.io/badge/RAG-4285F4?style=flat-square&logo=vectorworks&logoColor=white)
+![GraphRAG](https://img.shields.io/badge/GraphRAG-795548?style=flat-square&logo=neo4j&logoColor=white)
+![Prompt Engineering](https://img.shields.io/badge/Prompt_Engineering-FF9800?style=flat-square&logo=chatbot&logoColor=white)
+![On-Device AI](https://img.shields.io/badge/On--Device_AI-4CAF50?style=flat-square&logo=google-chrome&logoColor=white)
+
+### **Governance & Compliance**
+![Responsible AI](https://img.shields.io/badge/Responsible_AI-2196F3?style=flat-square&logo=ethereum&logoColor=white)
+![AI Safety](https://img.shields.io/badge/AI_Safety-E91E63?style=flat-square&logo=letsencrypt&logoColor=white)
+![Auditability](https://img.shields.io/badge/Auditability-607D8B?style=flat-square&logo=databricks&logoColor=white)
+![MCP Security](https://img.shields.io/badge/MCP_Security-DD0031?style=flat-square&logo=owasp&logoColor=white)
+
+### **Engineering Foundation**
 ![TypeScript](https://img.shields.io/badge/TypeScript_Expert-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Meta-Programming](https://img.shields.io/badge/Meta--Programming-8BC34A?style=flat-square&logo=javascript&logoColor=black)
-![Decorators](https://img.shields.io/badge/Decorators-FFC107?style=flat-square&logo=typescript&logoColor=black)
-![DI Systems](https://img.shields.io/badge/Dependency_Injection-2196F3?style=flat-square&logo=angular&logoColor=white)
-![Runtime Validation](https://img.shields.io/badge/Runtime_Validation-FF9800?style=flat-square&logo=shield&logoColor=white)
-
-### **Frontend Frameworks**
-![Angular](https://img.shields.io/badge/Angular_Expert-DD0031?style=flat-square&logo=angular&logoColor=white)
-![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Qwik](https://img.shields.io/badge/Qwik-AC7EF4?style=flat-square&logo=qwik&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=node.js&logoColor=white)
 ![Deno](https://img.shields.io/badge/Deno-000000?style=flat-square&logo=deno&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![System Design](https://img.shields.io/badge/System_Design-8BC34A?style=flat-square&logo=architecture&logoColor=black)
+![Micro-Frontends](https://img.shields.io/badge/Micro--Frontends-FFC107?style=flat-square&logo=webpack&logoColor=black)
 
 </div>
 
@@ -76,41 +90,42 @@ I'm a **senior developer and architect** with 20+ years of experience building w
 ## 🎤 Speaking & Writing
 
 ### **International Speaker**
-I speak at conferences worldwide about AI, architecture, and modern development:
+I speak at conferences worldwide about AI architecture, agents, evaluation, and safety:
 
-**Recent Talks:**
-- 🇨🇿 **DevConf.CZ 2025** - *"Generative UI: The Future of Frontend (And Why You Should Care)"*
-- 🇵🇱 **DevoxxPL 2025** - *"AI-First Architecture Patterns"*
-- 🌐 **Micro Frontends Conference 2024** - *"Cross-Framework Testing in Intelligent MFs"*
-- 🇺🇸 **ng-conf 2022** - *"TypeScript Meta-Programming: Building AI-Ready Systems"*
-- 🇺🇸 **Visual Studio Live! @ Microsoft HQ** - *"Enterprise AI Integration Strategies"*
+**Recent Conferences:**
+- 🇮🇱 **Reversim Summit 2025** — Tel Aviv, Israel
+- 🇨🇿 **DevConf.CZ 2025** — Brno, Czechia
+- 🇵🇱 **DevoxxPL 2025** — Kraków, Poland
+- 🇬🇷 **CityJS Athens 2024** — Athens, Greece
+- 🇵🇹 **NDC Porto 2024** — Porto, Portugal
+- 🇸🇬 **CityJS Singapore 2024** — Singapore
+- 🇺🇸 **Visual Studio Live! @ Microsoft HQ 2023** — Redmond, WA
 
-### **Focus Areas**
-- **AI in Web Development** - Helping teams add AI features to their applications
-- **JavaScript for AI** - Showing how JavaScript can be used for AI development
-- **MCP Integration** - Working with Model Context Protocol for better AI connections
-- **Smart Architecture** - Building systems that work well with AI
+→ Full history at [danduh.me/conferences](https://danduh.me/conferences)
+
+### **Talks & Workshops I Give**
+- 🔥 **Prompts Are Code. Start Treating Them That Way.** — prompt versioning & evaluation in production
+- **MCP Security: How Your Friendly MCP Tool Might Betray You** — agent tooling & the attack surface
+- **The Browser Revolution: Built-In AI APIs** — on-device and hybrid LLM inference
+- **Dev Smarter, Not Harder: AI for the Lazy (but Productive) Developer**
+- **AI-Powered E2E Testing: Faster Creation, Easier Maintenance** — agents that write and maintain tests
+- **Generative UI: Intent-Driven Interfaces** — LLMs as the runtime for adaptive UX
+- **Gen-AI on Localhost: Prompt, MCP, Fine-Tune and RAG&Roll** *(workshop)*
+- **From Idea to App with AI: Build a Full-Stack Project** *(workshop)*
 
 ### **Technical Writing**
-**Many articles** about AI and frontend development:
+I write about agentic systems, the Model Context Protocol, evaluation, RAG, and AI engineering in JavaScript/TypeScript.
 
-**AI Topics:**
-- How to add AI to web applications
-- JavaScript vs Python for AI projects
-- MCP servers and AI integration
-- Building smart user interfaces
+**🔥 Recent Articles:**
+- [Prompt Versioning: The Survival Tool Every Prompt Engineer Needs](https://medium.com/@danduh/prompt-versioning-the-survival-tool-every-prompt-engineer-needs-43c69ee827dd)
+- [MCP Servers: Powerful Allies or Sneaky Threats?](https://medium.com/@danduh/mcp-servers-powerful-sneaky-threats-e4685834843a)
+- [Stop Worshipping Python: Why JavaScript is the Real MVP for AI Integration](https://itnext.io/stop-using-python-use-javascript-for-ai-integration-37c60b0961b9)
+- [Structuring AI Responses for Better API Alignment](https://itnext.io/how-to-align-ai-responses-with-json-api-contracts-e4fd9ad5f348)
+- [Generative UI: Smart, Intent-Based, and AI-Driven](https://medium.com/design-bootcamp/generative-ui-smart-intent-based-and-ai-driven-a45c0ee18f94)
+- [Window.ai: The Future of In-Browser Gen-AI](https://medium.com/@danduh/window-ai-the-future-of-in-browser-gen-ai-35329e35b3ac)
+- [10 Advanced TypeScript Features Every Developer Should Know in 2025](https://medium.com/@danduh/10-advanced-typescript-features-every-developer-should-know-in-2025-795036e2a518)
 
-**Architecture Topics:**
-- Micro-frontend patterns and best practices
-- TypeScript advanced features
-- Testing across different frameworks
-- Modern development workflows
-
-**🔥 Popular Articles:**
-- [Stop Worshipping Python: Why JavaScript is the Real MVP for AI Integration](https://itnext.io/stop-using-python-use-javascript-for-ai-integration-37c60b0961b9) - *Why JavaScript is good for AI development*
-- [MCP Servers: Powerful Allies or Sneaky Threats?](https://medium.com/@danduh/mcp-servers-powerful-sneaky-threats-e4685834843a) - *Understanding MCP security and benefits*
-- [Prompt Versioning: The Survival Tool Every Prompt Engineer Needs](https://medium.com/@danduh/prompt-versioning-the-survival-tool-every-prompt-engineer-needs-43c69ee827dd) - *How to manage prompts in production*
-- [Window.ai: The Future of In-Browser Gen-AI](https://medium.com/@danduh/window-ai-the-future-of-in-browser-gen-ai-35329e35b3ac) - *AI running directly in browsers*
+→ More at [danduh.me/articles](https://danduh.me/articles) and [Medium](https://medium.com/@danduh)
 
 ---
 
@@ -118,27 +133,30 @@ I speak at conferences worldwide about AI, architecture, and modern development:
 
 <div align="center">
 
-### **AI + Web Development**
+### **Agentic AI, Evaluated and Governed**
 
 </div>
 
-**Current Projects:**
-- **Smart UI Components** - Building user interfaces that adapt using AI
-- **JavaScript AI Tools** - Making AI development easier for web developers
-- **MCP Integration** - Connecting applications with AI models safely
-- **Cross-Framework Testing** - Testing strategies for complex applications
+**Current Focus:**
+- **Agentic Systems at Scale** — orchestration, planning, and memory for multi-agent workflows that stay reliable under load
+- **Agent & LLM Evaluation** — building eval harnesses, LLM-as-judge scoring, and regression suites that gate releases
+- **AI Compliance & Governance** — guardrails, audit trails, and responsible-AI controls as first-class architecture
+- **LLM Fine-Tuning** — dataset curation, training, and disciplined before/after evaluation
+- **GraphRAG & Knowledge Systems** — retrieval and grounding that survive scale and change
+- **MCP Tooling** — secure, observable ways for agents to reach real systems
 
-**Technical Focus:**
-- **TypeScript Patterns** - Advanced code patterns for better applications
-- **Prompt Management** - Tools for managing AI prompts in production
-- **Browser AI** - Running AI directly in web browsers
-- **Team Workflows** - Better development processes for modern teams
+**Writing Next:**
+- A piece on **GraphRAG and "AI amnesia"** — what happens when AI builds systems nobody remembers how to own
+
+**Technical Depth:**
+- **Evaluation-first delivery** — treating evals and observability as the backbone of every AI system
+- **AI in TypeScript/Node** — proving JS is a serious platform for agents, RAG, and tooling
+- **On-Device & Hybrid AI** — Chrome Built-In AI APIs and local inference
 
 **Impact:**
-- **Teaching** - Helping developers learn AI integration
-- **Consulting** - Helping companies adopt AI in their products
-- **Community** - Organizing meetups and sharing knowledge
-- **Open Source** - Creating tools that everyone can use
+- **Speaking** — practical lessons on agents, evaluation, and AI safety at conferences worldwide
+- **Writing** — articles on agentic AI, MCP, and evaluation on Medium and ITNEXT
+- **Community** — helping engineers build AI that's measurable, safe, and production-ready
 
 ---
 
@@ -147,7 +165,7 @@ I speak at conferences worldwide about AI, architecture, and modern development:
 <div align="center">
 
 ### **Let's talk about:**
-🤖 **AI in Web Apps** | 🏗️ **Frontend Architecture** | ⚡ **JavaScript AI** | 🔧 **MCP Integration** | 👥 **Team Productivity** | 🚀 **Modern Development**
+🤖 **Agentic Systems** | 📊 **AI Evaluation** | 🛡️ **AI Governance & Safety** | 🎯 **Fine-Tuning** | 🔧 **MCP Integration** | 🧠 **RAG & GraphRAG**
 
 ### **Find me around the web:**
 
@@ -157,7 +175,7 @@ I speak at conferences worldwide about AI, architecture, and modern development:
 [![Twitter](https://img.shields.io/badge/🐦_Twitter-Follow-1DA1F2?style=for-the-badge)](https://twitter.com/danielostrovsky)
 [![YouTube](https://img.shields.io/badge/📺_YouTube-Subscribe-FF0000?style=for-the-badge)](https://www.youtube.com/@danduh81)
 
-### **Let's build something amazing together!**
+### **Let's build AI that's worth trusting.**
 
 </div>
 
@@ -169,6 +187,6 @@ I speak at conferences worldwide about AI, architecture, and modern development:
 
 **⭐ If you find my work interesting, give it a star!**
 
-*"Either you will lead AI in the industry, or AI will lead you out of it.” - Daniel Ostrovsky*
+*"Either you will lead AI in the industry, or AI will lead you out of it." - Daniel Ostrovsky*
 
 </div>
