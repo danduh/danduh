@@ -93,37 +93,41 @@ I build on the **Model Context Protocol (MCP)** to connect agents to tools, data
 I speak at conferences worldwide about AI architecture, agents, evaluation, and safety:
 
 **Recent Conferences:**
-- 🇮🇱 **Reversim Summit 2025** — Tel Aviv, Israel
-- 🇨🇿 **DevConf.CZ 2025** — Brno, Czechia
-- 🇵🇱 **DevoxxPL 2025** — Kraków, Poland
-- 🇬🇷 **CityJS Athens 2024** — Athens, Greece
-- 🇵🇹 **NDC Porto 2024** — Porto, Portugal
-- 🇸🇬 **CityJS Singapore 2024** — Singapore
-- 🇺🇸 **Visual Studio Live! @ Microsoft HQ 2023** — Redmond, WA
+- 🇮🇱 **Reversim Summit 2025** — Tel Aviv, Israel *(Oct 2025)*
+- 🇨🇿 **DevConf.CZ 2025** — Brno, Czechia *(Jun 2025)*
+- 🇵🇱 **DevoxxPL 2025** — Kraków, Poland *(Jun 2025)*
+- 🇬🇷 **CityJS Athens 2024** — Athens, Greece *(Nov 2024)*
+- 🇵🇹 **NDC Porto 2024** — Porto, Portugal *(Oct 2024)*
+- 🇸🇬 **CityJS Singapore 2024** — Singapore *(Jul 2024)*
+- 🇭🇷 **Web Summer Camp 2024** — Opatija, Croatia *(Jul 2024)*
+- 🇺🇸 **Visual Studio Live! @ Microsoft HQ 2023** — Redmond, WA *(Jul 2023)*
 
 → Full history at [danduh.me/conferences](https://danduh.me/conferences)
 
 ### **Talks & Workshops I Give**
-- 🔥 **Prompts Are Code. Start Treating Them That Way.** — prompt versioning & evaluation in production
+- 🔥 **Gen-AI on Localhost: Prompt, MCP, Fine-Tune and RAG&Roll** — end-to-end agentic AI, fine-tuning, and RAG on your own machine *(workshop)*
+- **Prompts Are Code. Start Treating Them That Way.** — prompt versioning & evaluation in production
 - **MCP Security: How Your Friendly MCP Tool Might Betray You** — agent tooling & the attack surface
-- **The Browser Revolution: Built-In AI APIs** — on-device and hybrid LLM inference
+- **The Browser Revolution: Built-In AI APIs** — on-device and hybrid LLM inference in Chrome
+- **AI-Powered E2E UI Testing: Faster Creation, Easier Maintenance** — agents that write and maintain tests
 - **Dev Smarter, Not Harder: AI for the Lazy (but Productive) Developer**
-- **AI-Powered E2E Testing: Faster Creation, Easier Maintenance** — agents that write and maintain tests
-- **Generative UI: Intent-Driven Interfaces** — LLMs as the runtime for adaptive UX
-- **Gen-AI on Localhost: Prompt, MCP, Fine-Tune and RAG&Roll** *(workshop)*
-- **From Idea to App with AI: Build a Full-Stack Project** *(workshop)*
+- **From Idea to App with AI: Build a Full-Stack Project** — with VS Code, Copilot, or any IDE *(workshop)*
+- **Generative UI: The Future of Frontend** — LLMs as the runtime for adaptive, intent-driven UX
+
+→ Invite me to speak: [danduh.me](https://danduh.me) · [Sessionize / LinkedIn](https://www.linkedin.com/in/danduh/)
 
 ### **Technical Writing**
-I write about agentic systems, the Model Context Protocol, evaluation, RAG, and AI engineering in JavaScript/TypeScript.
+I write about agentic systems, the Model Context Protocol, prompt engineering, evaluation, and AI engineering in JavaScript/TypeScript.
 
 **🔥 Recent Articles:**
-- [Prompt Versioning: The Survival Tool Every Prompt Engineer Needs](https://medium.com/@danduh/prompt-versioning-the-survival-tool-every-prompt-engineer-needs-43c69ee827dd)
-- [MCP Servers: Powerful Allies or Sneaky Threats?](https://medium.com/@danduh/mcp-servers-powerful-sneaky-threats-e4685834843a)
-- [Stop Worshipping Python: Why JavaScript is the Real MVP for AI Integration](https://itnext.io/stop-using-python-use-javascript-for-ai-integration-37c60b0961b9)
-- [Structuring AI Responses for Better API Alignment](https://itnext.io/how-to-align-ai-responses-with-json-api-contracts-e4fd9ad5f348)
-- [Generative UI: Smart, Intent-Based, and AI-Driven](https://medium.com/design-bootcamp/generative-ui-smart-intent-based-and-ai-driven-a45c0ee18f94)
-- [Window.ai: The Future of In-Browser Gen-AI](https://medium.com/@danduh/window-ai-the-future-of-in-browser-gen-ai-35329e35b3ac)
-- [10 Advanced TypeScript Features Every Developer Should Know in 2025](https://medium.com/@danduh/10-advanced-typescript-features-every-developer-should-know-in-2025-795036e2a518)
+- [Prompt Versioning: The Survival Tool Every Prompt Engineer Needs](https://medium.com/@danduh/prompt-versioning-the-survival-tool-every-prompt-engineer-needs-43c69ee827dd) — *Aug 2025*
+- [MCP Servers: Powerful Allies or Sneaky Threats?](https://medium.com/@danduh/mcp-servers-powerful-sneaky-threats-e4685834843a) — *Jul 2025*
+- [Stop Worshipping Python: Why JavaScript is the Real MVP for AI Integration](https://itnext.io/stop-using-python-use-javascript-for-ai-integration-37c60b0961b9) — *Jan 2025*
+- [Structuring AI Response for Better API Alignment](https://itnext.io/how-to-align-ai-responses-with-json-api-contracts-e4fd9ad5f348) — *Jan 2025*
+- [Why Formatting on LinkedIn Matters (and How I Built a Tool to Fix It with AI)](https://medium.com/@danduh/why-formatting-on-linkedin-matters-and-how-i-built-a-tool-to-fix-it-with-ai-cb04c96f0fc3) — *Apr 2025*
+- [Generative UI: Smart, Intent-Based, and AI-Driven](https://medium.com/design-bootcamp/generative-ui-smart-intent-based-and-ai-driven-a45c0ee18f94) — *Feb 2025*
+- [Window.ai: The Future of In-Browser Gen-AI](https://medium.com/@danduh/window-ai-the-future-of-in-browser-gen-ai-35329e35b3ac) — *Jul 2024*
+- [10 Advanced TypeScript Features Every Developer Should Know in 2025](https://medium.com/@danduh/10-advanced-typescript-features-every-developer-should-know-in-2025-795036e2a518) — *Aug 2025*
 
 → More at [danduh.me/articles](https://danduh.me/articles) and [Medium](https://medium.com/@danduh)
 
