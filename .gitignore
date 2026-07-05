@@ -10,6 +10,7 @@
 /portfolio/.cache-loader
 
 # Misc
+.DS_Store
 /portfolio/.DS_Store
 /portfolio/.env.local
 /portfolio/.env.development.local
