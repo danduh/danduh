@@ -172,15 +172,15 @@ const config: Config = {
           items: [
             {
               label: 'Twitter',
-              href: 'https://twitter.com/danielostrovsky',
+              href: 'https://x.com/danduh81',
             },
             {
               label: 'LinkedIn',
-              href: 'https://linkedin.com/in/danielostrovsky',
+              href: 'https://www.linkedin.com/in/danduh/',
             },
             {
               label: 'GitHub',
-              href: 'https://github.com/danielostrovsky',
+              href: 'https://github.com/danduh',
             },
           ],
         },
