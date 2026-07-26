@@ -509,6 +509,62 @@ body:has(.home) {
   }
 }
 
+/* ==========================================================================
+   Blog — editorial theming (scoped to blog routes via <html> page classes)
+   ========================================================================== */
+html.blog-list-page,
+html.blog-post-page,
+html.blog-tags-list-page,
+html.blog-tags-post-list-page,
+html.blog-authors-list-page,
+html.blog-authors-post-page {
+  --ifm-font-family-base: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --ifm-heading-font-weight: 500;
+  --ifm-background-color: #faf9f7;
+  --ifm-navbar-background-color: #faf9f7;
+  --ifm-link-color: #1173d4;
+  --ifm-link-hover-color: #0c5fb8;
+}
+
+html[data-theme='dark'].blog-list-page,
+html[data-theme='dark'].blog-post-page,
+html[data-theme='dark'].blog-tags-list-page,
+html[data-theme='dark'].blog-tags-post-list-page,
+html[data-theme='dark'].blog-authors-list-page,
+html[data-theme='dark'].blog-authors-post-page {
+  --ifm-background-color: #171615;
+  --ifm-navbar-background-color: #171615;
+  --ifm-link-color: #5aa2f0;
+  --ifm-link-hover-color: #8fc0f5;
+}
+
+/* Editorial serif titles with tighter tracking */
+html.blog-list-page article h2,
+html.blog-post-page h1:first-of-type {
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Post meta (date) in mono — the editorial signature */
+.blog-wrapper header time {
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+  font-size: 0.85em;
+}
+
+/* Comfortable reading measure for the post body */
+html.blog-post-page .markdown {
+  font-size: 1.05rem;
+  line-height: 1.75;
+}
+
+/* Mermaid diagrams: centered with breathing room */
+.blog-wrapper .docusaurus-mermaid-container {
+  display: flex;
+  justify-content: center;
+  margin: 1.75rem 0;
+}
+
 /* Video page specific styles */
 .video-grid {
   display: grid;
