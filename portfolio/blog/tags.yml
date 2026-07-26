@@ -1,0 +1,29 @@
+ai:
+  label: AI
+  permalink: /ai
+  description: Building with artificial intelligence in production.
+
+llms:
+  label: LLMs
+  permalink: /llms
+  description: Large language models — fine-tuning, evaluation, and use.
+
+agents:
+  label: Agents
+  permalink: /agents
+  description: Multi-agent systems and agentic architectures.
+
+architecture:
+  label: Architecture
+  permalink: /architecture
+  description: System and software architecture.
+
+graphrag:
+  label: GraphRAG
+  permalink: /graphrag
+  description: Knowledge graphs and graph-based retrieval.
+
+mcp:
+  label: MCP
+  permalink: /mcp
+  description: The Model Context Protocol and AI tooling.

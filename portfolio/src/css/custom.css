@@ -509,6 +509,110 @@ body:has(.home) {
   }
 }
 
+/* ==========================================================================
+   Blog — editorial theming (scoped to blog routes via <html> page classes)
+   ========================================================================== */
+html.blog-list-page,
+html.blog-post-page,
+html.blog-tags-list-page,
+html.blog-tags-post-list-page,
+html.blog-authors-list-page,
+html.blog-authors-post-page {
+  --ifm-font-family-base: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --ifm-heading-font-weight: 500;
+  --ifm-background-color: #faf9f7;
+  --ifm-navbar-background-color: #faf9f7;
+  --ifm-link-color: #1173d4;
+  --ifm-link-hover-color: #0c5fb8;
+}
+
+html[data-theme='dark'].blog-list-page,
+html[data-theme='dark'].blog-post-page,
+html[data-theme='dark'].blog-tags-list-page,
+html[data-theme='dark'].blog-tags-post-list-page,
+html[data-theme='dark'].blog-authors-list-page,
+html[data-theme='dark'].blog-authors-post-page {
+  --ifm-background-color: #171615;
+  --ifm-navbar-background-color: #171615;
+  --ifm-link-color: #5aa2f0;
+  --ifm-link-hover-color: #8fc0f5;
+}
+
+/* Accessibility (WCAG 2.1 AA) — fixes from Lighthouse audit.
+   The active navbar link and the active blog-sidebar link resolve to
+   --ifm-color-primary (#1173d4), only 3.8:1 on the dark #171615 blog
+   background. Lift just those to the lighter blue already used for content
+   links (#5aa2f0, ~6.8:1). --ifm-color-primary is left global so filled
+   primary buttons keep their white-text contrast. */
+[data-theme='dark'] .navbar__link--active {
+  color: #5aa2f0;
+}
+/* The blog sidebar paints its active link with
+   `color: var(--ifm-color-primary) !important` from inside a Docusaurus
+   cascade layer, so a plain color override can't win. Feed the variable it
+   reads instead, scoped to just this link — buttons elsewhere are untouched. */
+[data-theme='dark'] a[class*='sidebarItemLinkActive'] {
+  --ifm-color-primary: #5aa2f0;
+}
+
+/* WCAG 2.5.8 — author-card social icons render as 16×16 hit areas; the target
+   should be ≥24×24. Center the 16px glyph inside a 24px box. (The class is
+   theme-module-hashed, e.g. authorSocialLink_owbf, so match it by prefix.) */
+a[class*='authorSocialLink'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+/* Editorial serif titles with tighter tracking */
+html.blog-list-page article h2,
+html.blog-post-page h1:first-of-type {
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Post meta (date) in mono — the editorial signature */
+.blog-wrapper header time {
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+  font-size: 0.85em;
+}
+
+/* Comfortable reading measure for the post body */
+html.blog-post-page .markdown {
+  font-size: 1.05rem;
+  line-height: 1.75;
+}
+
+/* Mermaid diagrams: centered with breathing room */
+.blog-wrapper .docusaurus-mermaid-container {
+  display: flex;
+  justify-content: center;
+  margin: 1.75rem 0;
+}
+
+/* /blog list cards: compact, with a small side thumbnail (like /articles).
+   Only affects the LIST excerpt image; post-page images stay full-width. */
+html.blog-list-page .markdown {
+  display: flow-root;
+}
+html.blog-list-page .markdown img {
+  float: left;
+  width: min(260px, 45%);
+  margin: 0.15rem 1.5rem 0.75rem 0;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+@media (max-width: 600px) {
+  html.blog-list-page .markdown img {
+    float: none;
+    width: 100%;
+    margin: 0 0 1rem;
+  }
+}
+
 /* Video page specific styles */
 .video-grid {
   display: grid;
