@@ -5,7 +5,7 @@ slug: ai-amnesia-graphrag
 authors: [danduh]
 tags: [ai, architecture, graphrag]
 date: 2026-01-05
-image: /img/head.jpeg
+image: /img/ai-amnesia-graphrag/ai-amnesia.webp
 keywords:
   - AI amnesia
   - GraphRAG
@@ -41,6 +41,8 @@ The service that moved money in and out of the company didn't have a clear owner
 
 That's **AI amnesia**.
 
+![AI amnesia — a glowing brain wired to PRD, ADR, PR, release, and incident nodes.](/img/ai-amnesia-graphrag/ai-amnesia.webp)
+
 ## AI Didn't Just Replace Developers — It Replaced Memory
 
 From outside, it looks simple: "AI is replacing developers." Up close, it's messier.
@@ -61,6 +63,8 @@ Call it what you want. The pattern is clear: code without understanding is a tim
 
 ## These Organizations Underestimated Human Memory
 
+![A humanoid agent between a pile of fragmented, agent-generated code and a connected knowledge graph of PRDs, ADRs, incidents, and history.](/img/ai-amnesia-graphrag/organization_human_memory.webp)
+
 AI generates outputs. But those outputs don't come with intent, rationale, or shared understanding. You still need someone who can answer:
 
 - Why is it built this way?
@@ -80,6 +84,8 @@ Six months later, the mood shifts. A service depends on three other services in 
 First comes drift: small shortcuts, missing ADRs, half-written docs. Then opacity: you can't explain your own architecture without a week of archaeology. Then fear: people avoid critical areas. Every incident feels like surgery in the dark.
 
 By collapse, you have two options: hire senior engineers to reverse-engineer the system, or rewrite it.
+
+![The AI-amnesia collapse in five phases: Speed, Drift, Opacity, Fear, and Collapse.](/img/ai-amnesia-graphrag/first_graph.webp)
 
 The code "works" most of the time. The AI shipped features. What collapsed was the **shared mental model** of how everything fits together.
 
@@ -159,23 +165,7 @@ Invariants become first-class citizens. Linked to the incidents that birthed the
 
 The loop looks something like this:
 
-```mermaid
-flowchart LR
-  PRD[PRD: intent + constraints + success metrics]
-  PLAN[Plan: steps + risks + references]
-  ADR[ADR: decision + rationale]
-  PR[PR/Commits: implementation + reviews]
-  REL[Release: version + flags + expectations]
-  MON[Monitoring episodes: alerts/SLO/anomalies]
-  INC[Incident: root cause + fix + learnings]
-  INV[Invariants/Contracts: what must never break]
-
-  PRD --> PLAN --> ADR --> PR --> REL --> MON
-  MON --> INC --> PR
-  INC --> INV --> ADR
-  INV --> PLAN
-  ADR --> PRD
-```
+![The feature memory loop: product requirements → planning → architecture decision → implementation → release → monitoring → incident handling → invariants, feeding back into planning.](/img/ai-amnesia-graphrag/seconf_graph.webp)
 
 Now imagine someone, six months later, wants to change a small function deep inside `payouts-core`. In a normal "AI wrote most of this" environment, they'd be guessing. In your environment, the agent begins by pulling the decision chain from the knowledge graph: the original PRD, the ADR that justified this odd-looking logic, the incident from two months ago where you accidentally double-paid a thousand users, the invariant that says "never attempt payout if ledger state is older than five minutes."
 
@@ -202,6 +192,8 @@ Governance is not optional. The graph needs human-validated edges. ADRs need act
 Without this, your knowledge graph becomes a museum: pretty, disconnected from life.
 
 ## The Point
+
+![A knowledge graph linking PRD, ADR, pull request, release, and incident nodes to a summary layer.](/img/ai-amnesia-graphrag/the_point.webp)
 
 The idea is simple.
 
