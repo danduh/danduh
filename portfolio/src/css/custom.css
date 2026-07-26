@@ -565,6 +565,26 @@ html.blog-post-page .markdown {
   margin: 1.75rem 0;
 }
 
+/* /blog list cards: compact, with a small side thumbnail (like /articles).
+   Only affects the LIST excerpt image; post-page images stay full-width. */
+html.blog-list-page .markdown {
+  display: flow-root;
+}
+html.blog-list-page .markdown img {
+  float: left;
+  width: min(260px, 45%);
+  margin: 0.15rem 1.5rem 0.75rem 0;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+@media (max-width: 600px) {
+  html.blog-list-page .markdown img {
+    float: none;
+    width: 100%;
+    margin: 0 0 1rem;
+  }
+}
+
 /* Video page specific styles */
 .video-grid {
   display: grid;
