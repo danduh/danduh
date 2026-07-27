@@ -1,0 +1,7 @@
+flowchart LR
+  C[Client]:::node --> LB["Round-robin LB<br/>routes on Mcp-Method header"]:::good
+  LB --> A[Server A]:::good
+  LB --> B[Server B]:::good
+  LB --> D[Server C]:::good
+  classDef node fill:#36476F,stroke:#65A4D2,color:#EFF0F0,stroke-width:1.5px;
+  classDef good fill:#2E5A6E,stroke:#9BDAEF,color:#EAFBFF,stroke-width:2px;

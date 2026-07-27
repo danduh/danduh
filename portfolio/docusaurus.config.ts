@@ -228,6 +228,17 @@ const config: Config = {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
     },
+    // Click-to-zoom (lightbox) for content images — handy for the diagrams.
+    zoom: {
+      selector: '.markdown :not(em) > img',
+      background: {
+        light: 'rgba(20, 20, 25, 0.9)',
+        dark: 'rgba(10, 10, 12, 0.95)',
+      },
+      config: {
+        margin: 24,
+      },
+    },
   } satisfies Preset.ThemeConfig,
   plugins: [
     [
@@ -240,6 +251,7 @@ const config: Config = {
         disableInDev: false,
       },
     ],
+    'docusaurus-plugin-image-zoom',
   ],
 
 };

@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant C as Client
+  participant LB as Round-robin LB
+  participant A as Server A
+  participant B as Server B
+  C->>LB: tools/call (delete_files)
+  LB->>A: forwards
+  A-->>C: input_required (+ requestState blob)
+  Note over C: ask the user "Delete 3 files?"
+  C->>LB: retry (inputResponses + same blob)
+  LB->>B: lands on a DIFFERENT box
+  B-->>C: complete (rebuilt from the blob)

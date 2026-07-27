@@ -1,0 +1,159 @@
+---
+title: "MCP 2.0 Is Mostly Deletion. That's The Good Part."
+description: "MCP's biggest release since launch is mostly a subtraction — the session is gone and the protocol is stateless. What actually breaks, who has real migration work, and the one thing they quietly left unfixed."
+slug: mcp-goes-stateless
+authors: [danduh]
+tags: [mcp, architecture, agents]
+date: 2026-07-28
+image: /img/mcp-goes-stateless/hero.webp
+keywords:
+  - MCP
+  - MCP 2.0
+  - stateless protocol
+  - Model Context Protocol
+  - MCP tasks
+  - MCP apps
+  - MCP authorization
+---
+
+![MCP 2.0 — the stateless evolution: an infographic overview of the release, from sessions removed and per-request metadata to extensions, tasks, MCP Apps, auth hardening, and the deprecation roadmap.](/img/mcp-goes-stateless/hero.webp)
+
+Ok. MCP just shipped the biggest change since the day it launched, and the headline isn't a feature you get to switch on. It's the delete key.
+
+The [`2026-07-28` revision](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/) — people are calling it MCP 2.0, and it's the first release that breaks the base protocol on purpose — rips the session out. No more `initialize` handshake. No more `notifications/initialized`. No `Mcp-Session-Id`. No GET SSE endpoint, no resumable streams, no `resources/subscribe`, no `roots/list` at the top level, no `ping`, no `logging/setLevel`. Gone.
+
+And here's the thing — that's the good news.
+
+{/* truncate */}
+
+I've shipped servers behind three different gateways, and every one of them cracked open the JSON-RPC body to route a request. That's the tax the session quietly charged. On every call. This revision stops charging it.
+
+Let's get the map down before we walk the wreckage. Six threads landed in one revision — a stateless core, an extensions framework, a rebuilt Tasks story, server-sent UI, an OAuth hardening pass, and a written deprecation policy — and every one of them hangs off the first. Delete the session and the other five stop being optional.
+
+![MCP 2.0 overview: the release-date node branching to six threads — stateless core, extensions, tasks, MCP Apps, auth hardening, and the deprecation policy.](/img/mcp-goes-stateless/overview.png)
+
+## What they deleted (and why nobody's crying)
+
+The `initialize` handshake did three jobs at once, per connection: negotiate the protocol version, hand you the server's capabilities, hand the server yours. Three payloads welded together. That weld is gone, and the jobs got unbundled.
+
+Protocol version, client info, client capabilities now ride in `_meta` on every request, next to a mandatory `MCP-Protocol-Version` header that has to match or the server answers `400`. Server capabilities move to a new `server/discover` call you make only if you want them; servers must implement it, clients may never call it. Log level becomes a per-request field. Version negotiation happens inline — ask for a version the server doesn't speak and it hands back the list of ones it does.
+
+So every request now carries who you are and what you speak. Self-contained. Which means it can land anywhere.
+
+That last part is the whole point.
+
+## Sessions were never state. They were a bill.
+
+The part nobody printed on the box when MCP launched: the session wasn't a feature you used, it was a tax you paid down at the infrastructure layer. If you server held per-connection state, you had exactly three ways to run more than one box, and every one of them cost you money.
+
+You pinned each client to the instance holding its state — sticky sessions. Or you stood up Redis or Postgres so any box could reload it — a shared store you now operate, monitor, and get paged about at 3am.. Or you put a gateway in front that cracked open the JSON-RPC body on every single request just to work out where to send it. Deep packet inspection. To route a shopping basket.
+
+![Stateful topology: a client pinned by a sticky load balancer to one server, with all three servers reading and writing a shared Redis or Postgres session store.](/img/mcp-goes-stateless/topology-before.png)
+
+The [sessionless design](https://modelcontextprotocol.io/seps/2567-sessionless-mcp) deletes all three at once.
+
+![Stateless topology: a client behind a plain round-robin load balancer that routes on the Mcp-Method header to any of three interchangeable servers, with no shared store.](/img/mcp-goes-stateless/topology-after.png)
+
+Any request lands on any box. No shared store, no pinning, no gateway reading your mail. Round-robin and go home.
+
+## Where did the state go? Into the arguments.
+
+It didn't vanish. It became a string.
+
+Instead of a basket the server secretly holds against your connection, the server exposes a `create_basket()` tool that hands back a `basket_id` — call it BBB — and the model threads BBB straight into `add_item(BBB, …)` and then `checkout(BBB)`. No `handles/*` method, no handle type in the schema — a handle is a string in a result and a string in the next argument. Just a string.
+
+And this is already how every server you actually use behaves. Linear's `create_issue` returns an issue id. GitHub's `create_pull_request` returns a PR number. Stripe's `create_customer` returns a customer id. Nobody was keeping your Stripe customer alive in a session — they handed you an id and told you to bring it back. The difference now is the model can see the id, instead of it hiding in a transport session behind the server.
+
+How much of the ecosystem does this actually break? The maintainers ran the numbers on a sample of [1,000 open-source MCP servers](https://modelcontextprotocol.io/seps/2575-stateless-mcp). 90% never reference the session id at all. Another 3.5% only touch it as SDK routing boilerplate a sessionless transport deletes for them, and 2.8% touch it only to wire up the transport. Basically it's a two-line change for almost everyone, and a real rewrite for two small groups — servers that keyed application state on the session (2.5%), and gateways doing sticky routing (0.7%).
+
+One catch, a security one: the `requestState` blob comes from the client on the next call, so it's untrusted input the second it leaves your process. Integrity-protect it, bind it to the authenticated principal and the original arguments, give it an expiry.
+
+Signed `requestState` = untrusted input. Encrypted `requestState` = still untrusted, just unreadable. Signing is not a trust upgrade, so don't stuff anything secret in there and call it safe.
+
+## But the server still needs to ask you things
+
+A stateless server still has to stop mid-call and ask for something — confirm you really want to delete basket BBB, sample the model, read a root. The old way was a held-open SSE stream you side-channelled the question down. No stream anymore. So how?
+
+The answer is a mechanism called [Multi Round-Trip Requests](https://modelcontextprotocol.io/specification/draft/basic/patterns/mrtr), the cleanest idea in the release. Instead of streaming a question back, the server returns a result that says `input_required`, carrying the questions plus that opaque `requestState` blob. You gather the answers and re-issue the exact same call — original arguments, the new `inputResponses`, the same blob echoed back, a fresh request id. All the correlation lives in the payload, so the retry can land on any instance and rebuild from the blob alone.
+
+![Multi Round-Trip Requests sequence: server A answers a tool call with input_required plus a requestState blob, the client asks the user and retries, and the load balancer sends the retry to a different server B that rebuilds the state from the blob and completes.](/img/mcp-goes-stateless/mrtr.png)
+
+Server A asked the question. Server B finished the job. Neither of them held anything.
+
+The [same pattern](https://modelcontextprotocol.io/seps/2322-MRTR) swallowed URL elicitation too: no separate completion notification, no server-held `elicitationId`. The client finishes the external interaction and retries the original call. And there's a quietly good consequence — a server can no longer prompt you out of nowhere. Every question is causally tied to a call you started. Less spooky. Easier to audit.
+
+## Extensions aren't bolt-ons. They're the new default shape.
+
+The stateless core is deliberately small, and everything that used to fight its way in now lives outside it as an extension. The mechanics are dull, and that's the point. Client and server each declare supported extensions as namespaced capabilities — official ones carry `io.modelcontextprotocol/*` identifiers, anyone else uses a reverse-DNS prefix so `com.acme/whatever` can't collide with the standard. Each extension versions and ships on its own clock, off the base-protocol calendar. So a new idea can land, get beaten on in production, and earn its way into core or not — without holding the whole spec hostage to one feature's release date.
+
+## Tasks got demoted. On purpose.
+
+Tasks — long-running work you kick off and check on later — shipped as an experimental core feature in `2025-11-25`. Production got hold of it, found three things wrong, and the maintainers did the thing nobody wants to do to their own baby: they pulled it out of core and rebuilt it as [an extension](https://modelcontextprotocol.io/seps/2663-tasks-extension).
+
+The old design made you prime a warmup before you could even issue a task. Its blocking `tasks/result` needed exactly the open SSE stream the new rules now ban. And `tasks/list` had no safe scope once the session was gone. The real reason, not the hand-wavy one: a random bearer handle with enough entropy can safely identify one task. It cannot safely enumerate every task a user is allowed to see. Enumeration needs an identity model — who are you, what may you list — and a protocol guessing game is not that. So `tasks/list` isn't replaced. It's removed.
+
+![Tasks extension lifecycle: a tools/call returns a task handle in the working state, which can move to input_required and back via tasks/update, and terminates in completed, failed, or cancelled.](/img/mcp-goes-stateless/tasks.png)
+
+What's left is smaller and reads clean. The client advertises the Tasks extension; the server decides per call whether to answer with a normal result or a task handle — kick off a full export of basket BBB and you get a handle back, not a hung connection. Reads (`tasks/get`) stay pure and idempotent. Writes (`tasks/update`, `tasks/cancel`) are separate. Call one against a server that never advertised the capability and you get a clean `-32003` from the extension, or `-32021` if you asked core. And the handle doesn't come back until the task is durably created — so you never poll for a task that isn't there yet.
+
+The demotion is the real story, bigger than the feature. MCP now has a written path for "ship it as an extension, let production beat on it, promote it to core only if it survives." Tasks walked that path backwards and came out better for it. A protocol learning to say no to itself. Useful skill.
+
+## UI showed up, and it's in a box
+
+A tool can now render an actual interface. Not a wall of markdown — a real HTML app served under a `ui://` scheme, dropped into a sandboxed iframe with no access to your DOM, your cookies, or your storage, talking to the host only through `postMessage`. [MCP Apps](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/) has four actors, and holding them apart is the trick: the Server publishes the tool and the UI resource, the Host is the MCP client and the policy boundary, the Model picks ordinary tools and reads ordinary results, and the View is the untrusted HTML in the sandbox.
+
+The security property that matters is where a click goes. Hit a button in that View and it doesn't get a private tunnel to the server — it comes back as an ordinary `tools/call` through the host, down the identical path a call from the model would take: same authentication, same consent, same per-tool visibility check, same line in the audit log. Visibility defaults to `["model","app"]` per tool, and the host builds the sandbox's Content-Security-Policy out of `_meta.ui.csp`, so the server declares what its UI may load and the host enforces it. Server-authored code runs in a box, and everything it does leaves the box as structured JSON-RPC. That's the [difference](https://modelcontextprotocol.io/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp) between a UI standard you can ship to enterprises and remote code execution with a nicer name.
+
+But let's be honest about what a sandbox can and can't do. It fences the code. It does not fence the story the code tells a human. A sandboxed iframe can still paint a login form that isn't one, or hide a destructive action behind a cheerful blue button. CSP stops the JavaScript from phoning home. It does nothing about a screenshot-perfect fake asking for your password. The host has to keep its own chrome visibly separate and always show where the pixels came from — because the one thing you cannot sandbox is a lie.
+
+## The auth got hardened. The runtime didn't.
+
+Six changes tighten the [OAuth 2.1 profile](https://modelcontextprotocol.io/specification/draft/basic/authorization), and they're all the boring, correct kind. Issuer validation per RFC 9207 — the `iss` from the authorization response compared exactly against the issuer you picked before the redirect, no case folding, no trailing-slash cleanup. An `application_type` in dynamic registration, `native` for desktop and CLI and localhost clients, `web` for remote ones, so a desktop client's `localhost` redirect stops getting rejected on sight. Stored credentials bound to the validated issuer, so a resource moving issuer is a migration, not a quiet reuse of the old token. Defined refresh tokens, step-up scope accumulation, unambiguous `.well-known` paths, and a sane line on `offline_access` — the client may ask for it, the resource server should not demand it. Dynamic Client Registration is still there as a fallback but got deprecated late, in favour of Client ID Metadata Documents or pre-registration. And [Enterprise-Managed Authorization](https://blog.modelcontextprotocol.io/posts/enterprise-managed-auth/) went stable on `2026-06-18` — your IdP decides whether a client may reach a server at all, Okta first, with Asana, Atlassian, Canva, Figma, Granola, Linear, and Supabase on board.
+
+Real improvements. Take them.
+
+But does any of it authorise a tool call? No. Every one of these six governs the handshake — who you are, which server you may reach, at what scope, once. Not one checks whether this specific call, right now, with these arguments, is allowed to run. Per-call authorisation — the thing you actually want when your agent is firing tools in a loop at 40 requests a second — is still entirely yours to build.
+
+Six locks on the front door. Zero on the hallway.
+
+## The unglamorous half nobody demos
+
+Once every request stands alone, clients need to know when cached data has gone off. So [caching](https://modelcontextprotocol.io/specification/draft/server/utilities/caching) grew up: `ttlMs` and `cacheScope` land on cacheable results — `public` reusable across auth contexts, `private` not, the cache key covering the method and every parameter that can move the result. The TTL is a freshness hint, not a promise and not a polling schedule. A matching change notification invalidates the entry the instant it arrives, and a broken stream does not make a stale entry immortal.
+
+When it expires, fetch again. That's the whole contract.
+
+The old general GET stream and `resources/subscribe`/`unsubscribe` folded into one `subscriptions/listen` — a filtered subscription the server acknowledges, then feeds only the notifications you asked for. No `Last-Event-ID` recovery: stream breaks, you retry with a new id. Correctness comes from refetching; notifications only shave latency. Closing an HTTP response stream now cancels that request cleanly, and long-lived subscription streams stay alive with SSE-comment keep-alives so a proxy doesn't guillotine them for going quiet.
+
+The rest reads like a checklist written by someone who has been paged: W3C Trace Context rides through `_meta` so host, gateway, server, and every downstream call show up in one trace; the [`Mcp-Method` and `Mcp-Name` headers](https://modelcontextprotocol.io/seps/2243-http-standardization) mirror the operation so a gateway can route, meter, and categorize traffic without parsing the body; and a tool input field marked `x-mcp-header` gets projected into an `Mcp-Param-*` header for the same reason. None of it makes a launch video.
+
+A few quieter tightenings ride along. Tool schemas move to JSON Schema 2020-12, so what you already write for validation is what the protocol speaks. `structuredContent` stops insisting on an object — a tool can return an array, a number, a bare string, whatever the result actually is. Tool lists became deterministic — a stable ordering lets a client do a cheap equality check and lets the model's prompt cache actually hit. And the error codes got sorted: the old `-32002` resource-not-found folds into the standard `-32602`, and three new codes `-32020`/`-32021`/`-32022` show up. Not glamorous. Correct.
+
+## Who actually has work to do
+
+Ok, and now the part nobody demos… let's sort the migration by how much it's going to hurt. It is genuinely not the same for everyone.
+
+- stdio-only local server, no HTTP sessions → wait for your Tier-1 SDK's release candidate — Python, TypeScript, Go, or C# — bump the dependency, done.
+- Behind a gateway or a load balancer → drop the session id, move per-connection state onto explicit handles or the authenticated user, implement `server/discover`, emit `Mcp-Method` and `Mcp-Name`, and confirm your CDN and WAF pass `Mcp-*` through untouched — a proxy that strips an unknown header fails every request and looks exactly like a client bug at 2am.
+- Built on the experimental Tasks API, or on server-initiated SSE elicitation → budget real time.
+
+stdio-only local server = a no-op. Behind a gateway = the actual work, all of that 0.7% doing sticky routing and then some. Built on experimental Tasks = a rewrite.
+
+And the trap in all three: don't migrate by chasing compiler errors. Detect the era explicitly and keep legacy and modern state on separate paths — an old client wants initialization and a session, a new one sends self-describing calls, an old server omits `resultType` and a new one must include it. Blend both eras in one ambiguous code path and you get bugs that look like networking, then capability negotiation, then random server amnesia. Test the wire, not the TypeScript types.
+
+And don't build off the announcement examples. The RC was frozen back in May, but the intended-final draft kept moving: `clientInfo` became optional, `serverInfo` moved into result metadata, URL elicitation lost its completion notification, error ranges shifted, and DCR got deprecated late. The candidate stood still. The design did not.
+
+Nothing forces your hand on the date. Old clients and new servers keep talking by [negotiating down to `2025-11-25`](https://modelcontextprotocol.io/docs/learn/versioning) — that's the whole back-compat story for the deleted pieces. Version negotiation, not a grace period. The stateless removals are a clean break, and none of them got the twelve-month deprecation floor: that floor covers features carrying the Deprecated annotation that still work, not calls cut outright. You migrate when your SDK is ready, not when the calendar tells you to.
+
+## The part where a protocol grows up
+
+There's one more change behind the mechanics, and it outlives all of them: MCP now has a grown-up way to change. Substantial proposals go through the SEP process with a Working Group attached, and nothing on the Standards Track reaches Final without a conformance-suite scenario proving it behaves. Features get real lifecycle states — Active, Deprecated, Removed — with a twelve-month floor before a deprecation is even eligible to be pulled, and a 90-day fast lane for security. [Roots, Sampling, and Logging](https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging) are the first residents of Deprecated; they still work, they just carry the annotation now.
+
+There's a wonderful bit of comedy in the timing, the deadpan kind. This is the revision that writes down the careful twelve-month, conformance-gated, don't-yank-things-out-from-under-people policy — in the same breath that it yanks the session, the handshake, the GET stream, and half a dozen calls out of the core. Fine. You usually write the safety manual right after the thing you wish you'd had a safety manual for.
+
+## So, is this MCP 2.0?
+
+Officially, no. It's still date-versioned, it's `2026-07-28`, and the maintainers will tell you the "2.0" label is a marketing accident.
+
+Conceptually? I get why it sticks. The protocol just dropped its founding assumption — that a connection remembers who you are and what happened before you got here. Now every request explains itself, state carries a name instead of hiding in the wire, a paused interaction is a retry instead of a private phone call. Sessions felt like maturity. Real servers hold state, right? Turns out the session was the one grown-up-sounding thing standing between your server and a load balancer you never have to think about again. yeah, the maintainers looked at the most impressive feature they owned and hit delete.
+
+State was free the whole time. The session was just the subscription.
