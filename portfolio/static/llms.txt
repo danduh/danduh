@@ -1,8 +1,8 @@
 # Daniel Ostrovsky
 
-> UI & AI Architect. danduh.me is the personal site of Daniel Ostrovsky (danduh) — a blog, conference talks, videos, and syndicated articles on building maintainable software with AI: system architecture, GraphRAG, knowledge graphs, and long-term institutional memory for engineering organizations.
+> AI Architect. danduh.me is the personal site of Daniel Ostrovsky (danduh) — a blog, conference talks, videos, and syndicated articles on building maintainable software with AI: system architecture, GraphRAG, knowledge graphs, and long-term institutional memory for engineering organizations.
 
-Daniel Ostrovsky is a UI & AI Architect. He writes and speaks about AI-assisted engineering, system architecture, and the future of web development. This file indexes the primary content on danduh.me for language models.
+Daniel Ostrovsky is an AI Architect. He writes and speaks about AI-assisted engineering, system architecture, and the future of web development. This file indexes the primary content on danduh.me for language models.
 
 ## Blog
 

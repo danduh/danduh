@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Daniel Ostrovsky',
-  tagline: 'UI & AI Architect',
+  tagline: 'AI Architect',
   favicon: 'img/favicon.ico',
 
   // Editorial fonts used by the homepage redesign.
