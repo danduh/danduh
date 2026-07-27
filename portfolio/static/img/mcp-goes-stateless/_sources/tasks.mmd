@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> working: tools/call returns a task handle
+  working --> input_required: server needs input mid-run
+  input_required --> working: tasks/update (inputResponses)
+  working --> completed: result ready
+  working --> failed: execution error
+  working --> cancelled: tasks/cancel honored
+  completed --> [*]
+  failed --> [*]
+  cancelled --> [*]

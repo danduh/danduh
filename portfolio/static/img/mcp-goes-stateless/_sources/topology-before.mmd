@@ -1,0 +1,8 @@
+flowchart LR
+  C[Client]:::node --> LB["Load balancer<br/>sticky by Mcp-Session-Id"]:::warn
+  LB -. pinned .-> A[Server A]:::node
+  A --> S[("Shared session store<br/>Redis / Postgres")]:::warn
+  B[Server B]:::node --> S
+  D[Server C]:::node --> S
+  classDef node fill:#36476F,stroke:#65A4D2,color:#EFF0F0,stroke-width:1.5px;
+  classDef warn fill:#7A3B2E,stroke:#E5966D,color:#FFE9DE,stroke-width:2px;

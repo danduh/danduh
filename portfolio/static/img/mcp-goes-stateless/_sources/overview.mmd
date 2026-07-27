@@ -1,0 +1,11 @@
+flowchart TB
+  R["MCP 2026-07-28 (2.0)"]:::hub
+  R --> S["Stateless core<br/>the session is removed"]:::good
+  R --> E["Extensions<br/>first-class, reverse-DNS IDs"]:::node
+  R --> T["Tasks<br/>demoted to an extension"]:::node
+  R --> U["MCP Apps<br/>sandboxed UI"]:::node
+  R --> A["Auth hardening<br/>OAuth 2.1 profile"]:::node
+  R --> D["Deprecation policy<br/>12-month floor"]:::node
+  classDef hub fill:#7A3B2E,stroke:#E5966D,color:#FFE9DE,stroke-width:2px;
+  classDef good fill:#2E5A6E,stroke:#9BDAEF,color:#EAFBFF,stroke-width:2px;
+  classDef node fill:#36476F,stroke:#65A4D2,color:#EFF0F0,stroke-width:1.5px;

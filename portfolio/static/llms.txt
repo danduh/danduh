@@ -6,6 +6,7 @@ Daniel Ostrovsky is a UI & AI Architect. He writes and speaks about AI-assisted 
 
 ## Blog
 
+- [MCP 2.0 Is Mostly Deletion. That's The Good Part.](https://danduh.me/blog/mcp-goes-stateless): The 2026-07-28 Model Context Protocol revision goes stateless — the session is removed, application state becomes explicit handles, elicitation/sampling become Multi Round-Trip Requests, Tasks and UI move to extensions, and OAuth 2.1 gets hardened. What actually breaks, who has real migration work, and the per-call authorization gap it leaves unfixed. Topics: MCP, Model Context Protocol, stateless protocol, MCP tasks, MCP apps, MCP authorization, agents.
 - [You Can't Make Your Company AI Native Without Dealing With This First](https://danduh.me/blog/ai-native-knowledge): Becoming an AI native company hinges on the one thing almost everyone misses — whether your organizational knowledge is structured, trusted, and accessible to AI at every step of the product lifecycle. Covers knowledge silos across tools, trust scoring (production code = ground truth), staged trust elevation, and temporal feature memory (GraphRAG / Graphiti). Topics: AI, architecture, AI native, knowledge graph, GraphRAG, context rot, institutional memory.
 - [AI Is Building Code Nobody Can Maintain. You're Next.](https://danduh.me/blog/ai-amnesia-graphrag): Organizations ship code faster than ever — and forget faster than ever. How a GraphRAG-backed knowledge graph gives your org (and your AI agents) real long-term memory. Topics: AI, architecture, GraphRAG, knowledge graphs, institutional memory.
 

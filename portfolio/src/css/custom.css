@@ -1065,3 +1065,11 @@ html[data-theme='dark'] .share-btn:hover {
     align-items: flex-start;
   }
 }
+
+/* Image-zoom (docusaurus-plugin-image-zoom / medium-zoom): give the zoomed
+   image a faint edge + drop shadow so the dark-card diagrams separate from the
+   dim backdrop instead of blending into it. */
+.medium-zoom-image--opened {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 24px 64px rgba(0, 0, 0, 0.55);
+}
