@@ -1,0 +1,75 @@
+name: Update Portfolio Data
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Run every 6 hours
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  NODE_VERSION: "18"
+  MEDIUM_FEED_URL: https://medium.com/feed/@danduh
+  TALKS_URL: https://sessionize.com/api/speaker/json/h2ty3m9boh
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: "portfolio/package-lock.json"
+
+      - name: Install dependencies
+        run: |
+          cd portfolio
+          npm ci
+
+      - name: Fetch latest data
+        run: |
+          cd portfolio
+          npm run loadData
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          YT_PLAYLIST_ID: ${{ secrets.YT_PLAYLIST_ID }}
+          MEDIUM_FEED_URL: ${{ env.MEDIUM_FEED_URL }}
+          TALKS_URL: ${{ env.TALKS_URL }}
+
+      - name: Check for changes
+        id: changes
+        run: |
+          cd portfolio
+          if git diff --quiet src/data/; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No data changes detected"
+          else
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Data changes detected"
+          fi
+
+      - name: Commit and push changes
+        if: steps.changes.outputs.changes == 'true'
+        run: |
+          cd portfolio
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add src/data/
+          git commit -m "🤖 Auto-update portfolio data $(date -u +%Y-%m-%d)"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display update summary
+        run: |
+          cd portfolio
+          echo "📊 Data Update Summary:"
+          echo "🗞️  Articles: $(jq length src/data/medium.json 2>/dev/null || echo 'N/A')"
+          echo "🎥 Videos: $(jq length src/data/videos.json 2>/dev/null || echo 'N/A')"
+          echo "🎤 Sessions: $(jq length src/data/sessions.json 2>/dev/null || echo 'N/A')"
+          echo "🎪 Events: $(jq length src/data/events.json 2>/dev/null || echo 'N/A')"
