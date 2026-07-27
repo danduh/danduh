@@ -42,7 +42,7 @@ I've shipped servers behind three different gateways, and every one of them crac
 
 Let's get the map down before we walk the wreckage. Six threads landed in one revision — a stateless core, an extensions framework, a rebuilt Tasks story, server-sent UI, an OAuth hardening pass, and a written deprecation policy — and every one of them hangs off the first. Delete the session and the other five stop being optional.
 
-![MCP 2.0 overview: the release-date node branching to six threads — stateless core, extensions, tasks, MCP Apps, auth hardening, and the deprecation policy.](/img/mcp-goes-stateless/overview.png)
+![MCP 2.0 overview: the release-date node branching to six threads — stateless core, extensions, tasks, MCP Apps, auth hardening, and the deprecation policy.](/img/mcp-goes-stateless/overview.webp)
 
 ## What they deleted (and why nobody's crying)
 
@@ -60,11 +60,11 @@ The part nobody printed on the box when MCP launched: the session wasn't a featu
 
 You pinned each client to the instance holding its state — sticky sessions. Or you stood up Redis or Postgres so any box could reload it — a shared store you now operate, monitor, and get paged about at 3am.. Or you put a gateway in front that cracked open the JSON-RPC body on every single request just to work out where to send it. Deep packet inspection. To route a shopping basket.
 
-![Stateful topology: a client pinned by a sticky load balancer to one server, with all three servers reading and writing a shared Redis or Postgres session store.](/img/mcp-goes-stateless/topology-before.png)
+![Stateful topology: a client pinned by a sticky load balancer to one server, with all three servers reading and writing a shared Redis or Postgres session store.](/img/mcp-goes-stateless/topology-before.webp)
 
 The [sessionless design](https://modelcontextprotocol.io/seps/2567-sessionless-mcp) deletes all three at once.
 
-![Stateless topology: a client behind a plain round-robin load balancer that routes on the Mcp-Method header to any of three interchangeable servers, with no shared store.](/img/mcp-goes-stateless/topology-after.png)
+![Stateless topology: a client behind a plain round-robin load balancer that routes on the Mcp-Method header to any of three interchangeable servers, with no shared store.](/img/mcp-goes-stateless/topology-after.webp)
 
 Any request lands on any box. No shared store, no pinning, no gateway reading your mail. Round-robin and go home.
 
@@ -88,7 +88,7 @@ A stateless server still has to stop mid-call and ask for something — confirm 
 
 The answer is a mechanism called [Multi Round-Trip Requests](https://modelcontextprotocol.io/specification/draft/basic/patterns/mrtr), the cleanest idea in the release. Instead of streaming a question back, the server returns a result that says `input_required`, carrying the questions plus that opaque `requestState` blob. You gather the answers and re-issue the exact same call — original arguments, the new `inputResponses`, the same blob echoed back, a fresh request id. All the correlation lives in the payload, so the retry can land on any instance and rebuild from the blob alone.
 
-![Multi Round-Trip Requests sequence: server A answers a tool call with input_required plus a requestState blob, the client asks the user and retries, and the load balancer sends the retry to a different server B that rebuilds the state from the blob and completes.](/img/mcp-goes-stateless/mrtr.png)
+![Multi Round-Trip Requests sequence: server A answers a tool call with input_required plus a requestState blob, the client asks the user and retries, and the load balancer sends the retry to a different server B that rebuilds the state from the blob and completes.](/img/mcp-goes-stateless/mrtr.webp)
 
 Server A asked the question. Server B finished the job. Neither of them held anything.
 
@@ -104,7 +104,7 @@ Tasks — long-running work you kick off and check on later — shipped as an ex
 
 The old design made you prime a warmup before you could even issue a task. Its blocking `tasks/result` needed exactly the open SSE stream the new rules now ban. And `tasks/list` had no safe scope once the session was gone. The real reason, not the hand-wavy one: a random bearer handle with enough entropy can safely identify one task. It cannot safely enumerate every task a user is allowed to see. Enumeration needs an identity model — who are you, what may you list — and a protocol guessing game is not that. So `tasks/list` isn't replaced. It's removed.
 
-![Tasks extension lifecycle: a tools/call returns a task handle in the working state, which can move to input_required and back via tasks/update, and terminates in completed, failed, or cancelled.](/img/mcp-goes-stateless/tasks.png)
+![Tasks extension lifecycle: a tools/call returns a task handle in the working state, which can move to input_required and back via tasks/update, and terminates in completed, failed, or cancelled.](/img/mcp-goes-stateless/tasks.webp)
 
 What's left is smaller and reads clean. The client advertises the Tasks extension; the server decides per call whether to answer with a normal result or a task handle — kick off a full export of basket BBB and you get a handle back, not a hung connection. Reads (`tasks/get`) stay pure and idempotent. Writes (`tasks/update`, `tasks/cancel`) are separate. Call one against a server that never advertised the capability and you get a clean `-32003` from the extension, or `-32021` if you asked core. And the handle doesn't come back until the task is durably created — so you never poll for a task that isn't there yet.
 
