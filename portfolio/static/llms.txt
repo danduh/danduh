@@ -6,6 +6,7 @@ Daniel Ostrovsky is a UI & AI Architect. He writes and speaks about AI-assisted 
 
 ## Blog
 
+- [You Can't Make Your Company AI Native Without Dealing With This First](https://danduh.me/blog/ai-native-knowledge): Becoming an AI native company hinges on the one thing almost everyone misses — whether your organizational knowledge is structured, trusted, and accessible to AI at every step of the product lifecycle. Covers knowledge silos across tools, trust scoring (production code = ground truth), staged trust elevation, and temporal feature memory (GraphRAG / Graphiti). Topics: AI, architecture, AI native, knowledge graph, GraphRAG, context rot, institutional memory.
 - [AI Is Building Code Nobody Can Maintain. You're Next.](https://danduh.me/blog/ai-amnesia-graphrag): Organizations ship code faster than ever — and forget faster than ever. How a GraphRAG-backed knowledge graph gives your org (and your AI agents) real long-term memory. Topics: AI, architecture, GraphRAG, knowledge graphs, institutional memory.
 
 ## Site
