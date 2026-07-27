@@ -566,6 +566,15 @@ a[class*='authorSocialLink'] {
   width: 24px;
   height: 24px;
 }
+/* The container is a fixed 16px-tall flex row with overflow:hidden. Left as-is
+   it clips the bottom of the now-24px links — and that clipped strip isn't
+   hit-testable, so the enlarged target wouldn't even register. Let the row
+   grow to fit the 24px targets. */
+div[class*='authorSocials'] {
+  height: 24px;
+  overflow: visible;
+  align-items: center;
+}
 
 /* Editorial serif titles with tighter tracking */
 html.blog-list-page article h2,
