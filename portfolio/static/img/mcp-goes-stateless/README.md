@@ -10,11 +10,11 @@ as-is on Medium.
 |---|---|
 | `MCP_2.0__The_Stateless_Evolution.png` | Original hero (2752×1536, 7.3 MB). Source of truth; not used directly on the site. |
 | `hero.webp` | Web-optimized hero (1600w, ~326 KB). Used as the post lead image + social card. |
-| `overview.png` | The six-thread release overview. |
-| `topology-before.png` | Stateful topology (sticky LB + shared session store). |
-| `topology-after.png` | Stateless topology (round-robin, no shared store). |
-| `mrtr.png` | Multi Round-Trip Requests sequence (retry lands on a different box). |
-| `tasks.png` | Tasks extension lifecycle state machine. |
+| `overview.webp` | The six-thread release overview. |
+| `topology-before.webp` | Stateful topology (sticky LB + shared session store). |
+| `topology-after.webp` | Stateless topology (round-robin, no shared store). |
+| `mrtr.webp` | Multi Round-Trip Requests sequence (retry lands on a different box). |
+| `tasks.webp` | Tasks extension lifecycle state machine. |
 
 Diagram sources (Mermaid `.mmd` + the shared `theme.json`) live in
 `_sources/` next to these images; re-render with `@mermaid-js/mermaid-cli`

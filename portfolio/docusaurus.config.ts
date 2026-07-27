@@ -23,9 +23,26 @@ const config: Config = {
         crossorigin: 'anonymous',
       },
     },
-  ],
-  stylesheets: [
-    'https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap',
+    // Load the Google Fonts stylesheet asynchronously so it doesn't block
+    // first paint: preload it, then flip media from print→all once it lands.
+    // A render-blocking <link rel="stylesheet"> here would delay FCP.
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preload',
+        as: 'style',
+        href: 'https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap',
+        media: 'print',
+        onload: "this.media='all';this.onload=null;",
+      },
+    },
   ],
 
   // Render ```mermaid code blocks as diagrams (used in blog posts).
