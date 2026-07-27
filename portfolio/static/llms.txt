@@ -1,0 +1,26 @@
+# Daniel Ostrovsky
+
+> UI & AI Architect. danduh.me is the personal site of Daniel Ostrovsky (danduh) — a blog, conference talks, videos, and syndicated articles on building maintainable software with AI: system architecture, GraphRAG, knowledge graphs, and long-term institutional memory for engineering organizations.
+
+Daniel Ostrovsky is a UI & AI Architect. He writes and speaks about AI-assisted engineering, system architecture, and the future of web development. This file indexes the primary content on danduh.me for language models.
+
+## Blog
+
+- [AI Is Building Code Nobody Can Maintain. You're Next.](https://danduh.me/blog/ai-amnesia-graphrag): Organizations ship code faster than ever — and forget faster than ever. How a GraphRAG-backed knowledge graph gives your org (and your AI agents) real long-term memory. Topics: AI, architecture, GraphRAG, knowledge graphs, institutional memory.
+
+## Site
+
+- [Blog](https://danduh.me/blog): Long-form posts on AI architecture and maintainable engineering.
+- [Articles](https://danduh.me/articles): Articles & insights, syndicated from Medium.
+- [Videos](https://danduh.me/videos): Talks, tutorials, and video content.
+- [Conferences](https://danduh.me/conferences): Speaking engagements — talks on UI, AI, and the future of web development.
+- [Contact](https://danduh.me/contact): Get in touch with Daniel Ostrovsky.
+
+## Optional
+
+- [Medium](https://medium.com/@danduh): Full archive of published articles.
+- [YouTube](https://www.youtube.com/@danduh81): Video and talk recordings.
+- [GitHub](https://github.com/danduh): Open-source projects and code.
+- [LinkedIn](https://www.linkedin.com/in/danduh/): Professional profile.
+- [X / Twitter](https://x.com/danduh81): Short-form updates.
+- [Linktree](https://linktr.ee/danduh): All links in one place.
