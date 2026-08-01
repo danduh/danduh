@@ -182,7 +182,7 @@ I write about agentic systems, the Model Context Protocol, prompt engineering, e
 [![Website](https://img.shields.io/badge/🏠_Website-danduh.me-4285F4?style=for-the-badge)](https://danduh.me)
 [![LinkedIn](https://img.shields.io/badge/💼_LinkedIn-Connect-0077B5?style=for-the-badge)](https://www.linkedin.com/in/danduh/)
 [![Medium](https://img.shields.io/badge/📝_Medium-Follow-12100E?style=for-the-badge)](https://medium.com/@danduh)
-[![Twitter](https://img.shields.io/badge/🐦_Twitter-Follow-1DA1F2?style=for-the-badge)](https://twitter.com/danielostrovsky)
+[![Twitter](https://img.shields.io/badge/🐦_Twitter-Follow-1DA1F2?style=for-the-badge)](https://x.com/danduh81)
 [![YouTube](https://img.shields.io/badge/📺_YouTube-Subscribe-FF0000?style=for-the-badge)](https://www.youtube.com/@danduh81)
 
 ### **Let's build AI that's worth trusting.**
