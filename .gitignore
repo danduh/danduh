@@ -24,3 +24,10 @@ yarn-error.log*
 /.playwright-mcp
 
 .vscode/
+
+# Secrets / credentials — never commit
+client_secret_*.json
+*service-account*.json
+*.credentials.json
+gcp-*.json
+danduh-me-*.json
