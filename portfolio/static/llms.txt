@@ -16,6 +16,7 @@ Daniel Ostrovsky is an AI Architect. He writes and speaks about AI-assisted engi
 - [Articles](https://danduh.me/articles): Articles & insights, syndicated from Medium.
 - [Videos](https://danduh.me/videos): Talks, tutorials, and video content.
 - [Conferences](https://danduh.me/conferences): Speaking engagements — talks on UI, AI, and the future of web development.
+- [Projects](https://danduh.me/projects): Things I've built — browser-native AI demos and Chrome extensions (window.ai, an E2E test page-object generator, a LinkedIn post formatter).
 - [Contact](https://danduh.me/contact): Get in touch with Daniel Ostrovsky.
 
 ## Optional

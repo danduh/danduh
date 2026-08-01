@@ -1,4 +1,26 @@
-[{
-    "name": "TBD",
-    "description": "TBD"
-}]
+[
+  {
+    "name": "window.ai",
+    "tag": "Browser AI · Demo",
+    "tagline": "On-device AI APIs, right in the browser",
+    "description": "A hands-on playground for Chrome's built-in AI — run models locally through the window.ai APIs, with no cloud round-trip and no API keys.",
+    "url": "https://windowai.danduh.me/",
+    "cta": "Open the demo"
+  },
+  {
+    "name": "E2E Test AI Helper",
+    "tag": "Chrome extension",
+    "tagline": "AI-generated page objects for Cypress & Playwright",
+    "description": "Scan a page, identify elements by a predefined attribute, and generate ready-to-use page-object code for your end-to-end tests — Cypress and Playwright supported.",
+    "url": "https://e2eai.danduh.me/",
+    "cta": "Learn more"
+  },
+  {
+    "name": "LinkedIn Post Formatter",
+    "tag": "Chrome extension",
+    "tagline": "Bold, italic, and lists for LinkedIn posts",
+    "description": "LinkedIn's composer has no rich text. This extension adds bold, italic, and list formatting so your posts actually stand out in the feed.",
+    "url": "https://chromewebstore.google.com/detail/linkedin-post-formatter/emklccaefokniahdcphcfblelldpgblp",
+    "cta": "Add to Chrome"
+  }
+]

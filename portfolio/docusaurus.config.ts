@@ -152,11 +152,11 @@ const config: Config = {
           label: 'Conferences',
           position: 'left',
         },
-        // {
-        //   to: '/projects',
-        //   label: 'GitHub Projects',
-        //   position: 'left',
-        // },
+        {
+          to: '/projects',
+          label: 'Projects',
+          position: 'left',
+        },
         {
           to: '/contact',
           label: 'Contact',
@@ -212,7 +212,7 @@ const config: Config = {
               to: '/conferences',
             },
             {
-              label: 'GitHub Projects',
+              label: 'Projects',
               to: '/projects',
             },
             {
