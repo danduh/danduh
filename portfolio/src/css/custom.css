@@ -925,6 +925,38 @@ html[data-theme='dark'] .share-btn:hover {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+/* Blog post share bar */
+.blog-share {
+  margin: 2.5rem 0 0.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.blog-share__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.blog-share__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.blog-share .share-btn {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  text-decoration: none;
+}
+
+.blog-share .share-btn:hover {
+  border-color: var(--ifm-color-primary);
+}
+
 /* Speaking page specific styles */
 .speaking-container {
   max-width: 1200px;
