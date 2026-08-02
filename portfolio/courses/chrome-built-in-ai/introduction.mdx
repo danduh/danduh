@@ -1,0 +1,86 @@
+---
+title: "Introduction: AI in the browser, on-device"
+description: What Chrome's built-in AI is — Gemini Nano exposed as web APIs, running on-device with no backend, no keys, and no data leaving the machine — and how this course goes from zero to shipping.
+sidebar_position: 1
+sidebar_label: Introduction
+keywords:
+  - Chrome built-in AI
+  - Gemini Nano
+  - on-device AI
+  - window.ai
+  - LanguageModel
+---
+
+<LessonSchema
+  name="Introduction: AI in the browser, on-device"
+  description="What Chrome's built-in AI is — Gemini Nano exposed as web APIs, running on-device — and how this course goes from zero to shipping."
+  path="/courses/chrome-built-in-ai/introduction"
+/>
+
+# Introduction: AI in the browser, on-device
+
+{/* Status: PATTERN DEMO. This page shows the mechanics (frontmatter, LessonSchema,
+    CodeTabs, admonitions, cross-links). Prose gets rewritten in the writing pass. */}
+
+## What "built-in AI" actually means
+
+_Beat: Gemini Nano ships inside Chrome; the browser exposes it as web APIs. No backend, no API key, no per-request cost, nothing leaves the device._
+
+## The API family
+
+_Beat: one table mapping each API to what it does and where it lives in the course._
+
+## Why on-device
+
+_Beat: privacy, zero cost, low latency, offline — and the honest cost: a few GB of model, desktop-only, variable hardware._
+
+## The one pattern every API shares
+
+_Beat: `availability()` → `create()` → use → `destroy()`. Learn it once here; every later page reuses it._
+
+Every API in this course starts the same way — you ask whether it's available
+before you use it:
+
+<CodeTabs>
+```js
+// Every built-in AI API answers availability() the same way:
+// "unavailable" | "downloadable" | "downloading" | "available"
+const status = await LanguageModel.availability();
+
+if (status === 'available') {
+  const session = await LanguageModel.create();
+  console.log(await session.prompt('Say hi in one word.'));
+  session.destroy();
+}
+```
+```ts
+type Availability =
+  | 'unavailable'
+  | 'downloadable'
+  | 'downloading'
+  | 'available';
+
+const status: Availability = await LanguageModel.availability();
+
+if (status === 'available') {
+  const session: LanguageModel = await LanguageModel.create();
+  console.log(await session.prompt('Say hi in one word.'));
+  session.destroy();
+}
+```
+</CodeTabs>
+
+:::note Requirements
+Desktop Chrome (Windows, macOS, Linux). Some APIs are stable; others sit behind
+a flag or origin trial. Each page lists exactly what it needs. Full matrix on
+the [Shipping & compatibility](./shipping-and-compatibility) page.
+:::
+
+## How this course is structured
+
+_Beat: zero → superhero. Foundations, the Prompt API, the task APIs, embeddings,
+the agentic/MCP layer, then the production tail: observability and evaluation._
+
+---
+
+Next: [Setup & the availability lifecycle](./setup-and-availability).

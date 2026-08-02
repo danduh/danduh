@@ -1,0 +1,10 @@
+{
+  "label": "Chrome's Built-in AI",
+  "position": 1,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Chrome's Built-in AI — from 0 to superhero",
+    "description": "An on-device AI course for the web: the Prompt API, Summarizer, Translator + Language Detector, Writer/Rewriter, Proofreader, Embeddings, Multimodal, WebMCP, Generative UI, and an in-browser MCP client — plus observability, tracing, and evaluation. Everything runs on-device via Chrome's built-in Gemini Nano: no backend, no API keys, no data leaving the machine."
+  }
+}

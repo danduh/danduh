@@ -138,6 +138,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/courses',
+          label: 'Courses',
+          position: 'left',
+        },
+        {
           to: '/videos',
           label: 'Videos',
           position: 'left',
@@ -258,6 +263,21 @@ const config: Config = {
     },
   } satisfies Preset.ThemeConfig,
   plugins: [
+    // Dedicated docs instance for long-form Courses (multi-page, sidebar,
+    // prev/next, breadcrumbs, auto-sitemap). Kept separate from the (disabled)
+    // default docs and the blog. Each course = a top-level category folder
+    // under `courses/`.
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'courses',
+        path: 'courses',
+        routeBasePath: 'courses',
+        sidebarPath: './sidebarsCourses.ts',
+        showLastUpdateTime: true,
+        breadcrumbs: true,
+      },
+    ],
     [
       '@docusaurus/plugin-ideal-image',
       {
