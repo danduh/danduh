@@ -1,22 +1,22 @@
 import React, {type ReactNode} from 'react';
-import Footer from '@theme-original/BlogPostItem/Footer';
-import type FooterType from '@theme/BlogPostItem/Footer';
+import Header from '@theme-original/BlogPostItem/Header';
+import type HeaderType from '@theme/BlogPostItem/Header';
 import type {WrapperProps} from '@docusaurus/types';
 import {useBlogPost} from '@docusaurus/plugin-content-blog/client';
 import ShareButtons from '@site/src/components/ShareButtons';
 
-type Props = WrapperProps<typeof FooterType>;
+type Props = WrapperProps<typeof HeaderType>;
 
-export default function FooterWrapper(props: Props): ReactNode {
+export default function HeaderWrapper(props: Props): ReactNode {
   const {metadata, isBlogPostPage} = useBlogPost();
   return (
     <>
-      <Footer {...props} />
+      <Header {...props} />
       {isBlogPostPage && (
         <ShareButtons
           title={metadata.title}
           permalink={metadata.permalink}
-          placement="bottom"
+          placement="top"
         />
       )}
     </>

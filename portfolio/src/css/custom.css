@@ -927,13 +927,22 @@ html[data-theme='dark'] .share-btn:hover {
 
 /* Blog post share bar */
 .blog-share {
-  margin: 2.5rem 0 0.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--ifm-color-emphasis-200);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.blog-share--bottom {
+  margin: 2.5rem 0 0.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.blog-share--top {
+  margin: 1.25rem 0 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
 }
 
 .blog-share__label {
@@ -945,16 +954,19 @@ html[data-theme='dark'] .share-btn:hover {
 .blog-share__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .blog-share .share-btn {
+  padding: 0.4rem;
   border: 1px solid var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-700);
   text-decoration: none;
 }
 
 .blog-share .share-btn:hover {
   border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
 }
 
 /* Speaking page specific styles */
