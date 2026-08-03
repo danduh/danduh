@@ -32,7 +32,7 @@ turning.
 - Steer output with a system prompt and N-shot `initialPrompts`.
 - Stream replies with `promptStreaming()` and append the deltas (never replace).
 - Tune `temperature` and `topK` from `params()`, and fork a session with `clone()`.
-- Track `inputUsage` against `inputQuota`, survive context overflow, and `destroy()` on teardown.
+- Track `contextUsage` against `contextWindow`, survive context overflow, and `destroy()` on teardown.
 
 :::note Prerequisites
 Desktop Chrome with built-in AI switched on. If `LanguageModel` isn't there yet,
@@ -285,8 +285,8 @@ branch.destroy();
 
 ## Track tokens, quota, and context overflow
 
-A session has a budget — `inputQuota`, usually around 4096 input tokens — and
-`inputUsage` climbs as the conversation grows. Watch the gap. When a new prompt
+A session has a budget — `contextWindow`, usually around 4096 input tokens — and
+`contextUsage` climbs as the conversation grows. Watch the gap. When a new prompt
 would blow past the quota, the session quietly evicts your oldest turns to make
 room, one user/assistant pair at a time. The system prompt is never evicted;
 that's the whole reason it's special. And if even that can't free enough room,
@@ -294,7 +294,7 @@ you get a `QuotaExceededError` and nothing is dropped.
 
 <CodeTabs>
 ```js title="demo.js"
-console.log(`${session.inputUsage} / ${session.inputQuota} input tokens`);
+console.log(`${session.contextUsage ?? session.inputUsage} / ${session.contextWindow ?? session.inputQuota} input tokens`);
 
 try {
   const reply = await session.prompt(veryLongText);
@@ -308,7 +308,7 @@ try {
 }
 ```
 ```ts title="demo.ts"
-console.log(`${session.inputUsage} / ${session.inputQuota} input tokens`);
+console.log(`${session.contextUsage ?? session.inputUsage} / ${session.contextWindow ?? session.inputQuota} input tokens`);
 
 try {
   const reply: string = await session.prompt(veryLongText);
@@ -323,7 +323,7 @@ try {
 </CodeTabs>
 
 No `maxTokens`, no `tokensSoFar`, no `countPromptTokens()` — those names are from
-an older draft. `inputUsage` and `inputQuota` are the whole vocabulary now.
+an older draft. But newer Chrome renamed the live counters again — `inputUsage`/`inputQuota` became `contextUsage`/`contextWindow`, and `measureInputUsage()` became `measureContextUsage()`. Some builds still expose the old names, so read drift-safe: `session.contextUsage ?? session.inputUsage`.
 
 ## Destroy the session
 
@@ -400,7 +400,7 @@ than one. Fix: exactly one system message, first in the array. No top-level
 
 :::caution QuotaExceededError on a long chat
 Symptom: a prompt rejects with `QuotaExceededError`. Cause: even after evicting
-the oldest turns, the history plus the new prompt won't fit `inputQuota`. Fix:
+the oldest turns, the history plus the new prompt won't fit `contextWindow`. Fix:
 destroy and start a fresh session, or run the history through the Summarizer and
 prime a new session with the summary.
 :::
@@ -416,7 +416,7 @@ Symptom: `InvalidStateError` on `prompt()`. Cause: you already called
 - The system prompt lives at `initialPrompts[0]`, exactly once; N-shot examples follow as user/assistant pairs.
 - `promptStreaming()` yields deltas — accumulate them, don't replace.
 - `params()` gives you the `temperature`/`topK` ranges; feature-detect it before you call it.
-- `clone()` forks a primed session; `inputUsage`/`inputQuota` track the budget; overflow evicts oldest turns or throws.
+- `clone()` forks a primed session; `contextUsage`/`contextWindow` track the budget; overflow evicts oldest turns or throws.
 - `destroy()` frees GPU memory, and a destroyed session is done for good.
 
 Everyone else is still renting tokens.
