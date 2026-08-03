@@ -19,15 +19,257 @@ keywords:
 
 # Shipping it: the compatibility matrix
 
-{/* Status: skeleton — beats only. */}
+Ok. This is the page you keep pinned in a tab while you ship — every built-in AI API against the exact Chrome that runs it, the flag that unlocks it, and the state it's actually in. Bookmark it, because the matrix moves: Gemini Nano updates itself, origin trials lapse, and a flag that gated a global last month is a stable global this month. Everything below is reconciled against the live capabilities page, so when the table and the browser disagree, believe the browser.
 
-## The full matrix: API × Chrome version × stability × flag
-## Feature-detecting every API
-## Fallback patterns when an API is unavailable
-## Memory, teardown, and session hygiene
-## Where the spec is still moving
+## The compatibility matrix
+
+One model sits behind every row — Gemini Nano, 2B or 4B depending on the hardware — behind one download. Read the status column before you promise a PM anything. Stable means it's on the open web with no flag. Behind a flag means localhost or Canary only. Origin trial means you need a token to run it on a deployed origin.
+
+| API | Global | Chrome | Status | Flag | Lesson |
+|---|---|---|---|---|---|
+| Prompt API | `LanguageModel` | 148+ (web) | Stable | none on 148+ · older `#prompt-api-for-gemini-nano` | [Prompt API](./prompt-api) |
+| Summarizer | `Summarizer` | 138+ | Stable | none · older `#summarization-api-for-gemini-nano` | [Summarizer](./summarizer) |
+| Translator | `Translator` | 138+ | Stable | none · older `#translation-api` | [Translator + Language Detector](./translator-and-language-detector) |
+| Language Detector | `LanguageDetector` | 138+ | Stable | none · older `#language-detection-api` | [Translator + Language Detector](./translator-and-language-detector) |
+| Writer | `Writer` | 137–148 (lapsed) | Behind a flag | `#writer-api-for-gemini-nano` | [Writer & Rewriter](./writer-and-rewriter) |
+| Rewriter | `Rewriter` | 137–148 (lapsed) | Behind a flag | `#rewriter-api-for-gemini-nano` | [Writer & Rewriter](./writer-and-rewriter) |
+| Proofreader | `Proofreader` | 141–145 (lapsed) | Behind a flag | `#proofreader-api` or `#proofreader-api-for-gemini-nano` | [Proofreader](./proofreader) |
+| Embeddings | `SemanticEmbedder` | 152 Canary (EPP) | Behind a flag | `#semantic-embedder-api` | [Embeddings](./embeddings) |
+| WebMCP | `document.modelContext` | 149+ | Origin trial | `#enable-webmcp-testing` | [WebMCP](./webmcp) |
+| Generative UI | Prompt API + sandboxed iframe | experimental | Not production | rides the Prompt API | [Generative UI](./generative-ui) |
+| MCP client | `fetch` + Streamable HTTP | any | No new API | none | [MCP client](./mcp-client) |
+
+One more flag sits under every row: `#optimization-guide-on-device-model`, set to Enabled BypassPerfRequirement — the model download gate you flip on dev machines that sit under the hardware bar. Manage the download at `chrome://on-device-internals/` (the old `chrome://components` row is gone), and remember users have a kill-switch of their own at Settings → System → "Turn on-device AI on or off".
+
+Every row also needs the same host. Desktop only — Windows 10 and up, macOS 13 and up, Linux, and nothing on Android, iOS, or ChromeOS. Roughly 22 GB of free disk, because Chrome auto-purges the 4 GB model when you drop under that, or after about 30 days idle. A GPU with over 4 GB of VRAM, or a 16 GB-RAM tier. A non-metered network for the first download, and a secure context. Miss any one of those and `availability()` comes back `unavailable` with no flag you can flip to fix it — the hardware bar is covered in [Setup & the availability lifecycle](./setup-and-availability).
+
+Two footnotes the table can't hold. The Prompt API's image input is that same `LanguageModel` global — you opt in with `expectedInputs`, there's no separate global — but pre-148 Canary needed `#prompt-api-for-gemini-nano-multimodal-input`, since retired. And the Proofreader flag is genuinely two-faced: the live capabilities check reads `#proofreader-api`, while the shipped Proofreader page tells you to enable `#proofreader-api-for-gemini-nano`. Enable whichever your Chrome actually exposes — they gate the same API. WebMCP's entry point is `document.modelContext`; the old `navigator.modelContext` is deprecated as of Chrome 150.
+
+## Feature-detect everything
+
+The globals are simply `undefined` on browsers that don't ship them and on any page served over plain `http://`. So the first move is always the same: check `typeof X !== 'undefined'` in a secure context, then ask `availability()`. Never touch a global you didn't detect, and never assume the answer.
+
+Here's the one probe worth keeping — it walks every API and buckets each into available, needs-download, or unavailable. `downloadable` and `downloading` both collapse to needs-download: the model is coming, but a multi-gigabyte download stands between you and a working call.
+
+<CodeTabs>
+```js title="capabilities.js" {31,33}
+// Built-in AI globals exist only in a secure context (https or localhost).
+// Feature-detect first, then ask availability() — never the other way around.
+const APIS = {
+  prompt: 'LanguageModel',
+  summarizer: 'Summarizer',
+  translator: 'Translator',
+  detector: 'LanguageDetector',
+  writer: 'Writer',
+  rewriter: 'Rewriter',
+  proofreader: 'Proofreader',
+  embeddings: 'SemanticEmbedder',
+};
+
+// A few APIs want an option to answer precisely; the rest read bare.
+const OPTS = {
+  LanguageModel: { outputLanguage: 'en' },
+  Translator: { sourceLanguage: 'en', targetLanguage: 'es' },
+  Proofreader: { expectedInputLanguages: ['en'] },
+};
+
+// downloadable / downloading both mean "there, once a download finishes".
+const bucket = (state) =>
+  state === 'available' ? 'available'
+  : state === 'downloadable' || state === 'downloading' ? 'needs-download'
+  : 'unavailable';
+
+async function probe() {
+  const report = {};
+  for (const [key, name] of Object.entries(APIS)) {
+    const api = globalThis[name];
+    if (typeof api === 'undefined') { report[key] = 'unavailable'; continue; }
+    try {
+      report[key] = bucket(await api.availability(OPTS[name]));
+    } catch {
+      report[key] = 'unavailable'; // older builds throw on options they don't know
+    }
+  }
+  return report;
+}
+// → { prompt: 'available', translator: 'needs-download', embeddings: 'unavailable', … }
+```
+```ts title="capabilities.ts" {34,36}
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+type Bucket = 'available' | 'needs-download' | 'unavailable';
+
+interface AvailabilityApi {
+  availability(options?: Record<string, unknown>): Promise<Availability>;
+}
+
+const APIS: Record<string, string> = {
+  prompt: 'LanguageModel',
+  summarizer: 'Summarizer',
+  translator: 'Translator',
+  detector: 'LanguageDetector',
+  writer: 'Writer',
+  rewriter: 'Rewriter',
+  proofreader: 'Proofreader',
+  embeddings: 'SemanticEmbedder',
+};
+
+const OPTS: Record<string, Record<string, unknown>> = {
+  LanguageModel: { outputLanguage: 'en' },
+  Translator: { sourceLanguage: 'en', targetLanguage: 'es' },
+  Proofreader: { expectedInputLanguages: ['en'] },
+};
+
+const bucket = (state: Availability): Bucket =>
+  state === 'available' ? 'available'
+  : state === 'downloadable' || state === 'downloading' ? 'needs-download'
+  : 'unavailable';
+
+async function probe(): Promise<Record<string, Bucket>> {
+  const report: Record<string, Bucket> = {};
+  for (const [key, name] of Object.entries(APIS)) {
+    const api = (globalThis as Record<string, unknown>)[name] as AvailabilityApi | undefined;
+    if (typeof api === 'undefined') { report[key] = 'unavailable'; continue; }
+    try {
+      report[key] = bucket(await api.availability(OPTS[name]));
+    } catch {
+      report[key] = 'unavailable';
+    }
+  }
+  return report;
+}
+```
+</CodeTabs>
+
+## Fall back on purpose
+
+Built-in AI is an enhancement, not a dependency. Treat it like one you can lose. Half your traffic — mobile, old browsers, machines under the bar — will never see the global, and the honest response to that is a second path, not a spinner that never resolves.
+
+So plan for all four answers up front. No global, or `unavailable`, and you hand off to a cloud API or a reduced feature. `downloadable` or `downloading`, and `create()` blocks on a multi-gigabyte download — wire a `monitor` and show a bar, because a frozen button reads as a broken page. Only `available` lets you go straight through. Never assume you're on that last branch.
+
+<CodeTabs>
+```js title="fallback.js" {5,9,16}
+// One entry point, every branch handled. Built-in AI wins when it's there;
+// the cloud (or a smaller feature) covers everyone else.
+async function enhance(prompt, { onProgress, cloud }) {
+  // No global: old browser, http://, or mobile. Fall back and move on.
+  if (typeof LanguageModel === 'undefined') return cloud(prompt);
+
+  // Ask before you create. Never assume 'available'.
+  const state = await LanguageModel.availability({ outputLanguage: 'en' });
+  if (state === 'unavailable') return cloud(prompt);
+
+  // 'downloadable' / 'downloading': create() blocks on the model download.
+  const session = await LanguageModel.create({
+    outputLanguage: 'en',
+    monitor(m) {
+      // e.loaded is a 0..1 fraction — there's no e.total.
+      m.addEventListener('downloadprogress', (e) => onProgress(e.loaded * 100));
+    },
+  });
+  try {
+    return await session.prompt(prompt);
+  } finally {
+    session.destroy();
+  }
+}
+```
+```ts title="fallback.ts" {7,10,15}
+interface EnhanceDeps {
+  onProgress: (percent: number) => void;
+  cloud: (prompt: string) => Promise<string>;
+}
+
+async function enhance(prompt: string, { onProgress, cloud }: EnhanceDeps): Promise<string> {
+  if (typeof LanguageModel === 'undefined') return cloud(prompt);
+
+  const state = await LanguageModel.availability({ outputLanguage: 'en' });
+  if (state === 'unavailable') return cloud(prompt);
+
+  const session = await LanguageModel.create({
+    outputLanguage: 'en',
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => onProgress(e.loaded * 100));
+    },
+  });
+  try {
+    return await session.prompt(prompt);
+  } finally {
+    session.destroy();
+  }
+}
+```
+</CodeTabs>
+
+One exception to the progress bar: Embeddings ships without a `monitor` yet. You can't draw a download bar for `SemanticEmbedder`, so kick off `create()`, then poll `availability()` on a gentle interval until it reads `available` — sparingly, because polling can itself start a download.
+
+## Free the memory
+
+Every session, every task instance, every clone is a live claim on GPU memory, and none of them die on their own. You open them, you close them.
+
+`destroy()` when you're done. `destroy()` each clone separately — a clone is a second session that costs exactly what the first one did, and it does not go down with its parent. And wire a teardown for the moment the user leaves, because an SPA route change or a closed tab that skips `destroy()` leaves the model pinned until the process dies.
+
+```js title="teardown.js"
+const session = await LanguageModel.create({ outputLanguage: 'en' });
+const branch = await session.clone(); // a second live session — same GPU cost
+
+// … use them …
+
+session.destroy();
+branch.destroy(); // clones don't die with the parent — kill each one
+
+// Route change or tab close: free anything still open.
+window.addEventListener('beforeunload', () => session.destroy());
+```
+
+Leak enough of these and the next `create()` fails on a machine that had plenty of room ten sessions ago. It won't look like your bug. It is.
+
+## The naming drift
+
+The Prompt API renamed its token-accounting fields mid-flight, and both spellings are loose in the wild depending on which Chrome your user is on. Read defensively or your usage meter throws `undefined` on half your installs.
+
+| Older name | Current name |
+|---|---|
+| `session.inputUsage` | `session.contextUsage` |
+| `session.inputQuota` | `session.contextWindow` |
+| `session.measureInputUsage()` | `session.measureContextUsage()` |
+
+The fix is a nullish coalesce — reach for the new name, fall back to the old one, survive either build.
+
+```js title="drift.js"
+const used = session.contextUsage ?? session.inputUsage;
+const limit = session.contextWindow ?? session.inputQuota;
+const left = limit - used;
+```
+
 ## The pre-ship checklist
 
----
+Run this before it goes anywhere near a user. Not a vibe — a list you tick.
 
-That's the course. Back to [all courses](/courses).
+- [ ] Feature-detect every global with `typeof LanguageModel !== 'undefined'` (and the same for `Summarizer`, `Translator`, `LanguageDetector`, the rest) inside a secure context — https or localhost — before you touch it.
+- [ ] Call `availability()` and handle all four states: `unavailable`, `downloadable`, `downloading`, `available`.
+- [ ] For `downloadable` / `downloading`, create with a `monitor` and render `e.loaded * 100` as a progress bar. (`e.loaded` is a 0..1 fraction; there is no `e.total`.)
+- [ ] Have a real fallback for `unavailable` — a cloud API or a reduced feature. Never a blank page.
+- [ ] `destroy()` every session, task instance, and clone, and wire a `beforeunload` teardown.
+- [ ] Pass `outputLanguage: 'en'` to every Prompt API `create()`. It's load-bearing on current Chrome.
+- [ ] Message the limits: desktop-only, secure-context-only, so the visitors who can't run it get a reason instead of a dead button.
+- [ ] Don't ship a flag-only or lapsed-trial API — Writer, Rewriter, Proofreader, Embeddings, WebMCP — to the open web without a fallback or a registered origin-trial token.
+- [ ] Instrument it with [observability & tracing](./observability-and-tracing) and grade it with [evaluation](./evaluation) before you call it done.
+- [ ] Pin your eval suite and re-run it on every Chrome release — Gemini Nano auto-updates silently, with no version you can query from JS.
+- [ ] Don't log raw prompts or responses. On-device means the data never left the machine; your own logging is the one way to leak it anyway.
+
+:::tip Check your browser
+Don't trust a table — trust the browser in front of you. The live capabilities page at [windowai.danduh.me/status](https://windowai.danduh.me/status) probes every API in your current Chrome and prints the real state, flag by flag. And every pattern in this course has a runnable version: the [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) ships all 16 demos, one folder each, no build step.
+:::
+
+## Recap
+
+- One model, Gemini Nano, sits behind every API — but they land at different Chrome versions and stability tiers, so the status column is the promise you're actually allowed to make.
+- Feature-detect `typeof X !== 'undefined'` in a secure context, then `availability()`, before you create anything.
+- Treat built-in AI as an enhancement: handle all four states, wire a `monitor` for the download, and always keep a fallback for `unavailable`.
+- `destroy()` every session and clone, or orphaned sessions pin GPU memory until the tab dies.
+- Read the Prompt API's usage fields defensively — `session.contextUsage ?? session.inputUsage` — because the names drifted.
+- Pin your evals and re-run them on every Chrome release; Nano moves under you with no version to query.
+
+Sixteen lessons ago, [the introduction](./introduction) handed you a model that already lives on your users' machines, free. This last page is the tax on that gift: detect it, fall back when it's missing, free what you open, and re-check the matrix every time Chrome ships. Do the boring parts and the free model stays free.
+
+Everyone else ships a blank page and calls it on-device.
