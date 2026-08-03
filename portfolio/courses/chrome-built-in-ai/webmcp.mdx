@@ -1,33 +1,319 @@
 ---
-title: "WebMCP: the page as a tool surface"
-description: Expose your page's in-page actions as discoverable, callable tools for AI agents with document.modelContext.registerTool — one tool definition feeding both an in-page LanguageModel agent and an external browser agent.
+title: "WebMCP: your page as a tool surface"
+description: "WebMCP turns your page into a tool surface: register actions with document.modelContext.registerTool and drive them from an in-page LanguageModel agent."
 sidebar_position: 12
 sidebar_label: WebMCP
 keywords:
   - WebMCP
   - document.modelContext
   - registerTool
-  - Model Context Protocol
   - AI agents
+  - tool calling
 ---
 
 <LessonSchema
-  name="WebMCP: the page as a tool surface"
-  description="Expose your page's in-page actions as discoverable, callable tools for AI agents with document.modelContext.registerTool."
+  name="WebMCP: your page as a tool surface"
+  description="WebMCP turns your page into a tool surface: register actions with document.modelContext.registerTool and drive them from an in-page LanguageModel agent."
   path="/courses/chrome-built-in-ai/webmcp"
 />
 
-# WebMCP: the page as a tool surface
+# WebMCP: your page as a tool surface
 
-{/* Status: skeleton — beats only. */}
+So here's the WebMCP pitch: your page already has buttons, and behind each one is a function that knows how to do the thing — add to cart, book the room, file the return. WebMCP lets you hand those functions to an AI agent as named, callable tools, so the agent drives your app inside the user's own logged-in tab. No public API. No scraper pretending to be a user. No second auth handshake. You register the tools on `document.modelContext`, and in this lesson you expose a small cart, then point an in-page Gemini Nano agent at it and watch it do the clicking.
 
-## What WebMCP is (and the moving entry point)
-## registerTool and the descriptor shape
-## Lifecycle via AbortSignal
-## One definition, two consumers
-## Inspecting registered tools
-## Security & permission model
+## What you'll build
+
+- Resolve the moving entry point — `document.modelContext ?? navigator.modelContext` — and feature-detect it before you touch it.
+- Describe a page action as a tool descriptor: `name`, `description`, `inputSchema`, and an `execute` handler.
+- Register the whole set under one `AbortController` and tear it all down with a single `abort()`.
+- Wire an in-page `LanguageModel` agent that calls those exact tools through the intent loop.
+- Gate the feature honestly, because WebMCP is a flag most of your users have never flipped.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI. WebMCP is a draft API behind a flag — enable `chrome://flags/#enable-webmcp-testing` (Chrome 149+ ships it as a public origin trial). This lesson builds on the intent loop from [structured output & tool calling](./structured-output-and-tools); if `LanguageModel` isn't there yet, start with [Setup & the availability lifecycle](./setup-and-availability), and for which APIs are stable on which Chrome, keep [the compatibility matrix](./shipping-and-compatibility) open.
+:::
+
+## Expose the page as a tool surface
+
+For twenty-five years, automating a web app meant one of three miserable options: build a public API with its own auth, or drive a Selenium script that pretends to be a user, or scrape the rendered pixels and guess where to click. WebMCP adds a fourth. The page declares its own actions, and any agent — an extension, an OS-level assistant, or the `LanguageModel` sitting in the same tab — calls them by name. The `execute` handler runs in the page's context, with the user's cookies and session, exactly as if they'd clicked the button themselves. The page is the trust boundary.
+
+The teams already prototyping against it are the deep-state, transactional ones — Booking.com, Shopify, Instacart, TurboTax — the apps where "the agent does my work" means checkout, filing, a listing. And the reason it beats pixel-peeping is boring arithmetic: a named tool call with a validated schema lands somewhere around 98% task accuracy against a fraction of the tokens, because the agent stops reverse-engineering a UI from a screenshot.
+
+One catch before any of it works. The entry point moved. As of Chrome 150 the API lives on `document.modelContext`; the old `navigator.modelContext` is deprecated and will be removed. So you resolve both, prefer `document`, and bail to a banner if neither is there.
+
+<CodeTabs>
+```js title="demo.js" {3}
+// The entry point moved: document.modelContext is Chrome 150+,
+// navigator.modelContext is the deprecated 146–149 fallback. Resolve both.
+const modelContext = document.modelContext ?? navigator.modelContext;
+
+if (!modelContext) {
+  // No flag, or an http page — WebMCP needs a secure context. Degrade:
+  // keep the page usable and point people at the flag.
+  showFlagBanner('Enable chrome://flags/#enable-webmcp-testing to expose tools.');
+} else {
+  registerTools(modelContext); // safe to call now
+}
+```
+```ts title="demo.ts" {4-5}
+// document.modelContext / navigator.modelContext are ambient — Chrome ships no
+// public types yet, so declare the ModelContext shape you use.
+const modelContext: ModelContext | undefined =
+  document.modelContext ?? navigator.modelContext;
+
+if (!modelContext) {
+  showFlagBanner('Enable chrome://flags/#enable-webmcp-testing to expose tools.');
+} else {
+  registerTools(modelContext);
+}
+```
+</CodeTabs>
+
+## Describe a page action as a tool
+
+A tool is a descriptor. Not a class, not a server, not a route — just an object with four fields. The `name` is how the agent addresses it. The `description` is the primary documentation the agent reads to decide when to call it, so lead with the verb and spell out the side effect. The `inputSchema` is a JSON Schema for the arguments — the same `type`/`properties`/`required` you met in the tools lesson, with `additionalProperties: false` so a hallucinated key gets rejected. And `execute` is the handler that runs in your page.
+
+One difference from native `tools` on the Prompt API: there, `execute` had to resolve to a string. Here it resolves to `Promise<unknown>` — return an object, a string, whatever, and the browser serializes it back to the agent. Set `annotations.readOnlyHint` to `true` on the tools that don't mutate, so a well-behaved agent knows it can reorder or cache them.
+
+<CodeTabs>
+```js title="demo.js"
+// A tool is a plain descriptor object. addItem mutates the page's cart array.
+const addItem = {
+  name: 'addItem',
+  description: 'Add an item to the cart. If it is already there, increase its quantity. qty defaults to 1.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Item name, e.g. "milk"' },
+      qty: { type: 'integer', minimum: 1, description: '(optional) defaults to 1' },
+    },
+    required: ['name'],
+    additionalProperties: false,
+  },
+  annotations: { readOnlyHint: false }, // it mutates — tell honest agents so
+  // Runs in the page, with the user's session. Resolves to unknown (not a
+  // string) — the browser serializes whatever you return back to the agent.
+  async execute({ name, qty = 1 }) {
+    cart.push({ name, qty });
+    renderCart();
+    return `Added ${qty} of "${name}".`;
+  },
+};
+```
+```ts title="demo.ts"
+// ModelContextTool is the descriptor shape; execute resolves to Promise<unknown>.
+const addItem: ModelContextTool = {
+  name: 'addItem',
+  description: 'Add an item to the cart. If it is already there, increase its quantity. qty defaults to 1.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'Item name, e.g. "milk"' },
+      qty: { type: 'integer', minimum: 1, description: '(optional) defaults to 1' },
+    },
+    required: ['name'],
+    additionalProperties: false,
+  },
+  annotations: { readOnlyHint: false },
+  async execute(input: Record<string, unknown>): Promise<unknown> {
+    const name = String(input.name ?? '').trim();
+    const qty = Number(input.qty ?? 1);
+    cart.push({ name, qty });
+    renderCart();
+    return `Added ${qty} of "${name}".`;
+  },
+};
+```
+</CodeTabs>
+
+## Register the set and tear it down
+
+Registration is the whole handshake. There is no connect step, no session to open — you call `registerTool` per tool and they're live. Pass the same `AbortController` signal to every one, and you buy yourself a single off switch: abort once, and the whole set unregisters. That signal path is the portable one, working across every Chrome that ships WebMCP from 146 to 150. Chrome 150 also adds `unregisterTool(name)` and `clearContext()`, but the signal wins on reach, so reach for it.
+
+Where does the abort go? In a plain page, `beforeunload`. In React, the `useEffect` cleanup — and there it matters more than it looks, because StrictMode mounts twice and a second `registerTool` for a name already taken throws.
+
+<CodeTabs>
+```js title="demo.js"
+// CART_TOOLS is the source of truth — the same array feeds both consumers.
+const CART_TOOLS = [addItem, removeItem, listItems];
+
+// One controller governs every registration…
+const controller = new AbortController();
+for (const tool of CART_TOOLS) {
+  modelContext.registerTool(tool, { signal: controller.signal });
+}
+
+// …so one abort() unregisters the whole set. Do it on teardown.
+window.addEventListener('beforeunload', () => controller.abort());
+```
+```ts title="demo.ts"
+const CART_TOOLS: ModelContextTool[] = [addItem, removeItem, listItems];
+
+const controller = new AbortController();
+for (const tool of CART_TOOLS) {
+  modelContext.registerTool(tool, { signal: controller.signal });
+}
+
+window.addEventListener('beforeunload', () => controller.abort());
+```
+</CodeTabs>
+
+## Let the page's own agent call the tools
+
+Registering tools makes them visible to external agents. To let the page's own model call them, you bridge — because on today's Chrome a `LanguageModel` session doesn't automatically inherit the WebMCP registry. And the bridge is a loop you already wrote in the tools lesson.
+
+Same intent loop, same reasons. Create a session with a `responseFormat` schema of `{ toolName, args, reply }`, a system prompt that lists the tools, then loop: prompt, parse, run the named tool, feed the result back. The one WebMCP-specific line is the coercion — `execute` resolves to `unknown`, and the loop feeds text, so you stringify anything that isn't already a string. The dispatch looks each tool up in the same `CART_TOOLS` array you registered. One definition, two consumers.
+
+<CodeTabs>
+```js title="demo.js" {5-6}
+// Reuse the intent loop from the tools lesson and dispatch into CART_TOOLS —
+// the exact array registered on document.modelContext above.
+const session = await LanguageModel.create({
+  outputLanguage: 'en',          // load-bearing — omit it and JSON comes back fenced
+  responseFormat: INTENT_SCHEMA, // { toolName, args, reply }; toolName required
+  initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }], // lists the tools
+});
+
+let next = question; // e.g. "add milk and a dozen eggs, then show the cart"
+for (let i = 0; i < 8; i++) {
+  const step = parseJson(await session.prompt(next)); // fence-stripping parse
+  if (!step || step.toolName === 'done') {
+    render(step?.reply ?? 'Done.');
+    break;
+  }
+  const tool = CART_TOOLS.find((t) => t.name === step.toolName);
+  const raw = tool ? await tool.execute(step.args ?? {}) : { error: 'unknown tool' };
+  const result = typeof raw === 'string' ? raw : JSON.stringify(raw); // coerce unknown → text
+  next = `Result of ${step.toolName}: ${result}. Call the next tool, or emit {"toolName":"done"}.`;
+}
+
+session.destroy(); // free the model; controller.abort() frees the tools
+```
+```ts title="demo.ts" {4-5}
+type Step = { toolName: string; args?: Record<string, unknown>; reply?: string };
+
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  responseFormat: INTENT_SCHEMA,
+  initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }],
+});
+
+let next = question;
+for (let i = 0; i < 8; i++) {
+  const step = parseJson<Step>(await session.prompt(next));
+  if (!step || step.toolName === 'done') {
+    render(step?.reply ?? 'Done.');
+    break;
+  }
+  const tool = CART_TOOLS.find((t) => t.name === step.toolName);
+  const raw = tool ? await tool.execute(step.args ?? {}) : { error: 'unknown tool' };
+  const result = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  next = `Result of ${step.toolName}: ${result}. Call the next tool, or emit {"toolName":"done"}.`;
+}
+
+session.destroy();
+```
+</CodeTabs>
+
+## Gate it behind the flag, honestly
+
+Now the part the demo videos skip. WebMCP is not a shipped API. It's a W3C Draft Community Group Report that is still moving, exposed for local dev behind `chrome://flags/#enable-webmcp-testing` and for a deployed origin behind an origin-trial token. Which means: on the machines your actual users run, `document.modelContext` is usually undefined.
+
+So you never make it load-bearing. Feature-detect both surfaces, register the tools when they're there, and keep the page fully usable when they aren't — the cart still adds, removes, and lists whether or not an agent is watching. Build with it to learn where the API is going. Don't bet a product on a draft.
+
+<CodeTabs>
+```js title="demo.js"
+// Local dev uses the flag. A deployed origin registers an origin-trial token in
+// a <meta http-equiv="origin-trial"> tag, so document.modelContext exists for
+// visitors who never touch chrome://flags. Either way, gate both surfaces.
+const modelContext = document.modelContext ?? navigator.modelContext;
+const canAgent = typeof LanguageModel !== 'undefined';
+
+if (!modelContext) showFlagBanner(); // tools can't register — the cart still works
+if (!canAgent) disableAgent();       // no in-page agent — external agents can still call
+```
+```ts title="demo.ts"
+const modelContext: ModelContext | undefined =
+  document.modelContext ?? navigator.modelContext;
+const canAgent = typeof LanguageModel !== 'undefined';
+
+if (!modelContext) showFlagBanner();
+if (!canAgent) disableAgent();
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `12-webmcp/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome with `chrome://flags/#enable-webmcp-testing` on. Or use the hosted demo:
+**[WebMCP Recipe Workbench](https://windowai.danduh.me/webmcp)** (with the
+[API walkthrough](https://windowai.danduh.me/webmcp/docs)).
+
+Expected: the tools panel shows three tools registered on
+`document.modelContext`; type "add milk and a dozen eggs, then show the cart" and
+the in-page agent calls `addItem` twice and `listItems` once, logging each call,
+while the cart updates live.
+
+Requires: desktop Chrome with WebMCP enabled and Gemini Nano available — see
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+:::caution Works on one Chrome, undefined on another
+Symptom: registration runs on your machine and throws on a colleague's.
+Cause: you reached for `navigator.modelContext`, which is deprecated in Chrome 150
+and absent where the API moved to `document`. Fix: always resolve
+`document.modelContext ?? navigator.modelContext` and prefer `document`; never
+hardcode one surface.
+:::
+
+:::caution DOMException: duplicate tool name
+Symptom: a second `registerTool` for the same name throws a `DOMException`
+mentioning "duplicate tool name" or "already registered". Cause: you registered
+that name twice without aborting the first — in React, StrictMode double-invokes
+your effect. Fix: keep one `AbortController`, abort the prior registration before
+re-registering, and treat the duplicate error as already-registered.
+:::
+
+:::caution registerTool throws on undefined
+Symptom: `Cannot read properties of undefined`. Cause: no flag, or the page is
+on `http` — WebMCP needs a secure context, and the entry point is simply absent.
+Fix: feature-detect `document.modelContext ?? navigator.modelContext` and bail to
+a banner before you call anything; serve over `https` or `localhost`.
+:::
+
+:::caution Your users never see the tools
+Symptom: it works for you and registers nothing for everyone else. Cause: WebMCP
+is a flag and origin trial, off by default — a draft API, not a shipped one. Fix:
+don't ship it as load-bearing. Register an origin-trial token to light it up on
+your origin, and keep the page fully usable without it.
+:::
+
+:::caution The agent answers in prose and never calls a tool
+Symptom: the in-page session replies with text, or returns fenced JSON the loop
+can't parse. Cause: `LanguageModel.create({ tools })` is unreliable on recent
+Canary, and you left `outputLanguage` off. Fix: drive the tools with the intent
+loop, keep a fence-stripping parse, and always pass `outputLanguage: 'en'`.
+:::
+
+## Recap
+
+- The entry point is `document.modelContext`, with `navigator.modelContext` as the deprecated fallback — resolve both, feature-detect, bail to a banner.
+- A tool is a descriptor: `name`, `description`, `inputSchema`, `execute` — and `execute` runs in the page with the user's session and resolves to `Promise<unknown>`.
+- One `AbortController` across the set means one `abort()` unregisters everything; it's portable across Chrome 146–150.
+- The in-page agent is the same intent loop from the tools lesson, dispatching into the same registered `CART_TOOLS` — one definition, two consumers.
+- WebMCP is a moving draft behind a flag; gate it, never ship it as load-bearing.
+
+Registering a tool is just handing an agent a function you already wrote and trust. The page is the boundary, the `AbortSignal` is the off switch, and the loop is the tools lesson pointed at your own buttons. The alternative is paying a model by the token to guess where that button is from a screenshot.
+
+## Next steps
+
+- [Generative UI (MCP Apps)](./generative-ui) — let a tool return an interactive UI, not just a serialized result.
+- [Structured output & tool calling](./structured-output-and-tools) — the intent loop this lesson reuses, and the native `tools` path it works around.
+- [Shipping & compatibility](./shipping-and-compatibility) — versions, flags, and how to ship a feature that leans on a draft API.
+- [WebMCP API walkthrough](https://windowai.danduh.me/webmcp/docs) — the hosted reference for `registerTool` and the descriptor shape.
 
 ---
 
-Next: [Generative UI / MCP Apps](./generative-ui).
+Next: [Generative UI (MCP Apps)](./generative-ui)

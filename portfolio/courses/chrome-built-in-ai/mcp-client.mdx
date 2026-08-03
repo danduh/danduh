@@ -1,6 +1,6 @@
 ---
 title: "An MCP client in the browser"
-description: The inverse of WebMCP — connect the page to a remote MCP server over Streamable HTTP, list its tools, and let the built-in LanguageModel drive them through a responseFormat agent loop. Plus the CORS reality that will bite you.
+description: Turn the browser into an MCP client — run the Streamable HTTP handshake, list a remote server's tools, and let the on-device LanguageModel drive them.
 sidebar_position: 14
 sidebar_label: MCP client
 keywords:
@@ -13,21 +13,363 @@ keywords:
 
 <LessonSchema
   name="An MCP client in the browser"
-  description="Connect the page to a remote MCP server over Streamable HTTP, list its tools, and let the built-in LanguageModel drive them through a responseFormat agent loop."
+  description="Turn the browser into an MCP client — run the Streamable HTTP handshake, list a remote server's tools, and let the on-device LanguageModel drive them."
   path="/courses/chrome-built-in-ai/mcp-client"
 />
 
 # An MCP client in the browser
 
-{/* Status: skeleton — beats only. */}
+So you taught Gemini Nano to call your own functions back in the tool-calling
+lesson, and turned your page into a tool surface in WebMCP. Now the browser
+becomes an MCP client — it dials a remote MCP server over Streamable HTTP, lists
+the tools that server exposes, and lets the on-device model drive them. Same
+protocol as WebMCP, opposite end of the wire: your tab does the calling now, with
+no backend of your own in the middle.
 
-## Client vs server: the inverse of WebMCP
-## The connect flow (transport, initialize, listTools)
-## Calling a tool
-## The agent loop: why not native tool calling
-## CORS: the thing that will bite you
-## Token handling and a local test server
+## What you'll build
+
+- Run the MCP `initialize` handshake over Streamable HTTP and read a server's tool catalog with `tools/list`.
+- Call a remote tool with `tools/call` and flatten its content blocks into a plain string.
+- Bridge those remote tools into the `LanguageModel` intent loop so on-device Nano drives them.
+- Get past the browser's CORS wall with a proxy, and send a bearer token without leaking it.
+- Ship a mock server so the whole loop runs offline when no remote server is around.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI. This lesson stands on two earlier ones: the
+intent loop from [Structured output & tool calling](./structured-output-and-tools)
+and the protocol from [WebMCP](./webmcp) — read those first. If `LanguageModel`
+isn't there yet, start with
+[Setup & the availability lifecycle](./setup-and-availability); for which APIs are
+stable on which Chrome, see [the compatibility matrix](./shipping-and-compatibility).
+:::
+
+## Run the handshake over Streamable HTTP
+
+Let's start on the wire. An MCP client is three JSON-RPC calls in a trench coat:
+`initialize` to shake hands, `tools/list` to ask what the server can do,
+`tools/call` to make it do one. The transport underneath is Streamable HTTP — a
+plain POST to a single endpoint, except the reply can come back as JSON or as a
+Server-Sent Events stream, so you accept both.
+
+One detail the SDKs hide and you can't: after `initialize`, the server hands back
+an `Mcp-Session-Id` response header, and every request after that has to echo it.
+Miss it and the server forgets you between calls. There's also a notification the
+handshake needs — `notifications/initialized`, no id, no reply. Send it, or
+`tools/list` won't answer.
+
+<CodeTabs>
+```js title="demo.js"
+// The browser is the MCP client. One primitive — send(request) — POSTs JSON-RPC
+// 2.0 over Streamable HTTP. Streamable HTTP can answer with JSON or an SSE
+// stream, so ask for both.
+function makeHttpTransport({ url, token }) {
+  let sessionId = null; // the server hands this back on initialize
+  return {
+    async send(request) {
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      };
+      if (sessionId) headers['Mcp-Session-Id'] = sessionId;
+      if (token) headers.Authorization = 'Bearer ' + token; // optional bearer
+      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(request) });
+      const sid = res.headers.get('Mcp-Session-Id');
+      if (sid) sessionId = sid; // cross-origin, the server must EXPOSE this header
+      const text = await res.text();
+      if (!text) return null; // 202 Accepted: a notification, no body
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('text/event-stream') ? parseSse(text) : JSON.parse(text);
+    },
+  };
+}
+
+let id = 0;
+const rpc = (t, method, params) => t.send({ jsonrpc: '2.0', id: ++id, method, params });
+const notify = (t, method, params) => t.send({ jsonrpc: '2.0', method, params });
+
+// initialize -> notifications/initialized -> tools/list.
+async function connectTransport(t) {
+  const init = await rpc(t, 'initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'browser-mcp-client', version: '0.1.0' },
+  });
+  await notify(t, 'notifications/initialized', {}); // completes the handshake
+  const list = await rpc(t, 'tools/list', {});
+  return { server: init.result.serverInfo, tools: list.result.tools }; // [{name, description, inputSchema}]
+}
+
+// Streamable HTTP may stream the reply as SSE; pull the data line and parse it.
+function parseSse(text) {
+  const data = text.split(/\r?\n/).filter((l) => l.startsWith('data:'))
+    .map((l) => l.slice(5).trim()).join('\n');
+  return data ? JSON.parse(data) : null;
+}
+```
+```ts title="demo.ts"
+interface JsonRpcRequest { jsonrpc: '2.0'; id?: number; method: string; params?: unknown; }
+interface Transport { send(request: JsonRpcRequest): Promise<any>; }
+
+function makeHttpTransport({ url, token }: { url: string; token?: string }): Transport {
+  let sessionId: string | null = null;
+  return {
+    async send(request) {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      };
+      if (sessionId) headers['Mcp-Session-Id'] = sessionId;
+      if (token) headers.Authorization = 'Bearer ' + token;
+      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(request) });
+      const sid = res.headers.get('Mcp-Session-Id');
+      if (sid) sessionId = sid;
+      const text = await res.text();
+      if (!text) return null;
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('text/event-stream') ? parseSse(text) : JSON.parse(text);
+    },
+  };
+}
+
+let id = 0;
+const rpc = (t: Transport, method: string, params: unknown) =>
+  t.send({ jsonrpc: '2.0', id: ++id, method, params });
+const notify = (t: Transport, method: string, params: unknown) =>
+  t.send({ jsonrpc: '2.0', method, params });
+
+async function connectTransport(t: Transport) {
+  const init = await rpc(t, 'initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'browser-mcp-client', version: '0.1.0' },
+  });
+  await notify(t, 'notifications/initialized', {});
+  const list = await rpc(t, 'tools/list', {});
+  return { server: init.result.serverInfo, tools: list.result.tools };
+}
+
+function parseSse(text: string) {
+  const data = text.split(/\r?\n/).filter((l) => l.startsWith('data:'))
+    .map((l) => l.slice(5).trim()).join('\n');
+  return data ? JSON.parse(data) : null;
+}
+```
+</CodeTabs>
+
+## Call a remote tool
+
+Let's call one. `tools/call` takes the tool name and an arguments object, and the
+server answers with content blocks — usually a `text` block, sometimes an image
+or an embedded resource. A model can't reason over a block array, so you flatten
+it: pull the text, stringify anything else, hand back one string. That string is
+what the model reads next.
+
+<CodeTabs>
+```js title="demo.js"
+// One JSON-RPC request; flatten the content blocks to a string for the model.
+async function callTool(t, name, args) {
+  const res = await rpc(t, 'tools/call', { name, arguments: args });
+  const content = (res.result && res.result.content) || [];
+  return content.map((b) => (b.type === 'text' ? b.text : JSON.stringify(b))).join('\n');
+}
+```
+```ts title="demo.ts"
+async function callTool(t: Transport, name: string, args: Record<string, unknown>): Promise<string> {
+  const res = await rpc(t, 'tools/call', { name, arguments: args });
+  const content: any[] = (res.result && res.result.content) || [];
+  return content.map((b) => (b.type === 'text' ? b.text : JSON.stringify(b))).join('\n');
+}
+```
+</CodeTabs>
+
+## Hand the tools to Gemini Nano
+
+Now the payoff. You already have the loop — you're just pointing it at tools you
+didn't write. Constrain Nano to the same `{ toolName, args, reply }` schema, drop
+the server's tool list into the system prompt so the model knows the menu, then
+run the cycle: prompt, parse, `tools/call`, feed the result back. The on-device
+model decides which remote tool to hit and with what arguments; your JavaScript
+makes the network call.
+
+Nano never touches the wire. It just points.
+
+Why the loop and not the native `tools` array? Because on the Chrome build this
+was written against, native tool calling dropped calls on the floor, and the loop
+leans only on `responseFormat`, which has been solid since the Prompt API reached
+the open web. Same trade you made in the tool-calling lesson — reach for the loop
+when strangers run your code.
+
+<CodeTabs>
+```js title="demo.js"
+// The intent schema and fence-stripping parse are the same as the tool lesson.
+const INTENT_SCHEMA = {
+  type: 'object',
+  required: ['toolName'],
+  additionalProperties: false,
+  properties: {
+    toolName: { type: 'string', description: 'Tool to call next, or "done" to reply.' },
+    args: { type: 'object', description: 'Arguments for the tool.' },
+    reply: { type: 'string', description: 'Final answer — only when toolName is "done".' },
+  },
+};
+
+if ((await LanguageModel.availability()) !== 'available') return;
+const session = await LanguageModel.create({
+  outputLanguage: 'en',            // load-bearing — omit it and the JSON degrades
+  responseFormat: INTENT_SCHEMA,
+  initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }], // lists the server's tools
+});
+
+let next = question;
+for (let i = 0; i < 8; i++) { // cap the turns (MAX_TOOL_CALLS)
+  const step = extractJsonFromResponse(await session.prompt(next)); // fence-stripping parse
+  if (!step || step.toolName === 'done') { render(step?.reply ?? 'Done.'); break; }
+  const result = await callTool(transport, step.toolName, coerceArgs(step.args)); // remote tools/call
+  next = `Tool "${step.toolName}" result: ${result}. Call the next tool, or emit {"toolName":"done","reply":"..."}.`;
+}
+session.destroy();
+```
+```ts title="demo.ts"
+type Step = { toolName: string; args?: unknown; reply?: string };
+
+const INTENT_SCHEMA = {
+  type: 'object',
+  required: ['toolName'],
+  additionalProperties: false,
+  properties: {
+    toolName: { type: 'string', description: 'Tool to call next, or "done" to reply.' },
+    args: { type: 'object', description: 'Arguments for the tool.' },
+    reply: { type: 'string', description: 'Final answer — only when toolName is "done".' },
+  },
+} as const;
+
+if ((await LanguageModel.availability()) !== 'available') throw new Error('unavailable');
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  responseFormat: INTENT_SCHEMA,
+  initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }],
+});
+
+let next = question;
+for (let i = 0; i < 8; i++) {
+  const step = extractJsonFromResponse(await session.prompt(next)) as Step | null;
+  if (!step || step.toolName === 'done') { render(step?.reply ?? 'Done.'); break; }
+  const result = await callTool(transport, step.toolName, coerceArgs(step.args));
+  next = `Tool "${step.toolName}" result: ${result}. Call the next tool, or emit {"toolName":"done","reply":"..."}.`;
+}
+session.destroy();
+```
+</CodeTabs>
+
+## Get past CORS
+
+Ok, the part the demo can't paper over. A desktop MCP client — Claude Desktop, an
+IDE, a CLI — talks to servers over stdio or from a trusted process, no browser in
+the way. Yours runs inside a tab, so every call is a cross-origin fetch, which
+means CORS. And here's the uncomfortable truth: most MCP servers in the wild
+assume a native client and send no CORS headers at all, so they fail at
+`initialize` with a bare "Failed to fetch" and no detail, because the browser
+hides cross-origin failures on purpose.
+
+For a real connection the server has to allow your origin, and — the one everyone
+misses — expose the `Mcp-Session-Id` header, or the browser strips the session id
+and every follow-up request drops it. If you don't control the server, you run a
+CORS proxy: a dependency-free relay that sits between the tab and the target,
+server-to-server where CORS doesn't apply, and paints the headers back on the way
+out.
+
+```bash
+# A tiny relay: browser -> localhost -> target server (no CORS on that last hop).
+TARGET='https://example.com/mcp' node ./mcp-cors-proxy.mjs
+# then point the demo's Server URL at the proxy's localhost address.
+```
+
+The bearer token, if the server wants one, rides as
+`Authorization: Bearer <token>` on every request — you saw it in the transport
+above. Keep it in memory, never in `localStorage`, and scope it down. One honest
+gap to know: MCP over Streamable HTTP authorizes the whole session, not each
+`tools/call`, so any tool you enable runs with the same credential. A demo token
+in a browser tab is a demo token. Not your production admin key.
+
+:::tip Try it
+Run it locally: open `14-mcp-client/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo: **[MCP client demo](https://windowai.danduh.me/mcp-client)**
+(its [API walkthrough](https://windowai.danduh.me/mcp-client/docs) has the full protocol).
+
+Expected: with the default in-page mock server, Connect lists `add`, `multiply`,
+and `echo`; then asking "What is 21 plus 21, then multiply the result by 2?" logs
+a `tools/call` to `add`, then one to `multiply`, and replies 84. Switch to a
+remote URL to speak to a real server.
+
+Requires: desktop Chrome with Gemini Nano available for the agent step —
+connecting and listing tools works without it. See
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+:::caution connect() throws "Failed to fetch" or a TypeError
+Symptom: `initialize` rejects immediately with a network error and no detail.
+Cause: the remote server sent no `Access-Control-Allow-Origin` for your origin, so
+the browser blocked the response before your code ever saw it. Fix: connect to a
+server you control, or route through a CORS proxy that adds the header. The browser
+enforces this — there's no client-side switch to turn it off.
+:::
+
+:::caution "Missing session ID" after a clean initialize
+Symptom: `initialize` succeeds but `tools/list` fails complaining about the
+session. Cause: the server sets `Mcp-Session-Id` on initialize but doesn't list it
+in `Access-Control-Expose-Headers`, so the browser reads it as null and later
+requests drop it. Fix: a server-side change to expose the header, or a proxy that
+exposes it for you.
+:::
+
+:::caution The token works in curl but not in the tab
+Symptom: the bearer token authorizes fine from the terminal, the browser rejects
+the request. Cause: the server doesn't allow `Authorization` in
+`Access-Control-Allow-Headers`, so the `OPTIONS` preflight fails before the real
+request goes out. Fix: the server has to allow the header (a proxy can reflect it).
+And mind the gap — the session is authorized once, not per call, so every enabled
+tool runs with that one credential.
+:::
+
+:::caution The loop stalls partway through a request
+Symptom: the agent hangs in the middle of a multi-tool answer. Cause: `tools/call`
+is one request and one response with no streaming, so a slow remote tool blocks the
+whole loop until it resolves — and you've capped the loop at eight turns. Fix: keep
+the cap, add a per-call timeout, and don't wire a known-slow tool into an
+interactive chat.
+:::
+
+:::caution It connected last month, now initialize rejects
+Symptom: a handshake that used to work starts failing. Cause: MCP is a moving
+target — the protocol version and transport have shifted more than once
+(`2024-11-05`, `2025-03-26`, `2025-06-18`), and a server upgrade can drop an old
+client. Fix: send a current `protocolVersion`, read the one the server negotiates
+back, and expect to bump it again.
+:::
+
+## Recap
+
+- An MCP client is three JSON-RPC calls over Streamable HTTP — `initialize`, `tools/list`, `tools/call` — plus the `notifications/initialized` handshake and the `Mcp-Session-Id` you echo on every request.
+- `tools/call` returns content blocks; flatten them to a string before the model reads them.
+- The bridge to on-device Nano is the same intent loop: a `responseFormat` schema, the tools in the system prompt, and a capped prompt → parse → call → feed-back cycle.
+- CORS is the wall: the server must allow your origin and expose `Mcp-Session-Id`, or you run a proxy. The bearer token stays in memory and authorizes the whole session, not one call.
+
+That's the whole stack — a model that never leaves the device, tools on a server
+you didn't build, a loop you can read in one screen. No SDK. No backend. Just a
+fetch and a schema.
+
+You needed a fetch, not a platform.
+
+## Next steps
+
+- [WebMCP: the page as a tool surface](./webmcp) — the inverse, where your page is the server other agents call.
+- [Structured output & tool calling](./structured-output-and-tools) — the intent loop this lesson points at remote tools.
+- [Observability & tracing](./observability-and-tracing) — watch every tool call, its latency, and the session, with no backend.
+- [MCP Client API reference](https://windowai.danduh.me/mcp-client/docs) — the hosted walkthrough of the connect flow and the CORS rules.
 
 ---
 
-Next: [Observability & tracing](./observability-and-tracing).
+Next: [Observability & tracing](./observability-and-tracing)
