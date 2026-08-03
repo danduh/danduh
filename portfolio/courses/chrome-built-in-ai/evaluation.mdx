@@ -1,36 +1,298 @@
 ---
 title: "Evaluation"
-description: "Evaluate on-device AI: golden datasets, deterministic checks for structured output, LLM-as-judge, and regression across Chrome versions and hardware."
+description: "Evaluate on-device AI you can't eyeball: build a golden set, score answers with deterministic checks, run each case many times, and report a stability rate."
 sidebar_position: 16
 sidebar_label: Evaluation
 keywords:
   - AI evaluation
-  - LLM eval
+  - golden set
+  - stability rate
   - LLM-as-judge
-  - regression testing
   - on-device AI
 ---
 
 <LessonSchema
   name="Evaluation"
-  description="Golden datasets, deterministic checks for structured output, LLM-as-judge, and regression across Chrome versions and hardware."
+  description="Evaluate on-device AI you can't eyeball: build a golden set, score answers with deterministic checks, run each case many times, and report a stability rate."
   path="/courses/chrome-built-in-ai/evaluation"
 />
 
 # Evaluation
 
-{/* Status: skeleton — beats only.
-    NOTE: not covered by the window-ai source docs — drafted from domain
-    positions; needs a review/fact pass before publishing. */}
+So. The model sitting on your users' machines is small and non-deterministic — it can be confidently wrong, and the same prompt hands back a different answer on the next run. Which kills the way you're tempted to check it: run once, read the output, nod, ship. This lesson builds the alternative — a golden set, a deterministic score, each case run ten times, and a stability rate — then drives the whole thing against `window.ai` in CI without pretending Gemini Nano fits on a GitHub runner.
 
-## Why a tiny model raises the eval stakes
-## Building a golden dataset
-## Deterministic checks for structured output
-## LLM-as-judge (cloud judge vs on-device judge)
-## Regression across Chrome versions and hardware
-## The latency/quality tradeoff
-## Wiring evals into CI
+## What you'll build
+
+- Build a golden set — trusted inputs, each paired with a plain-language rule and a deterministic `check` — starting at 8 to 30 cases.
+- Score outputs two ways: rule-based checks in regular code (the CI-safe core), then LLM-as-judge for the fuzzy stuff, without letting Nano grade itself.
+- Run each case 5 to 10 times and report a stability rate, counting `ERROR` (the harness broke) apart from `FAIL` (the model was wrong).
+- Drive the suite against `window.ai` from CI with a Playwright bridge, split across every PR, nightly, and local so real Nano runs where it actually can.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on, and at least one call worth grading. This builds on [the Prompt API](./prompt-api) and pairs with [Observability & tracing](./observability-and-tracing) — once you can see every call, you measure whether it was any good. New here? Start with [Setup & the availability lifecycle](./setup-and-availability), and keep [the compatibility matrix](./shipping-and-compatibility) handy for what's stable where. It assumes you already know the four availability states — it won't re-teach them.
+:::
+
+## Start with a golden set
+
+An eval is only as honest as the set it runs against. A golden set is a handful of trusted inputs, each paired with what a good answer looks like — the happy path, a few edges, and the nasty ones you already know the small model chokes on. Start with 8 to 30 cases. Grow toward a thousand before a real release.
+
+The shipped shape is small: an `id`, a `name`, which `api` it hits, the `input`, a `rule` written in plain language a human can read, an optional `summaryType`, and a `check` — regular code that returns `{ pass, reason }`. Here's the one case that runs the rest of this lesson: the yes/no answer the small model loves to pad into a sentence.
+
+<CodeTabs>
+```js title="goldenSet.js"
+// One golden case: a trusted input + a plain-language rule + a deterministic check.
+const yesNo = {
+  id: 'prompt-yesno',
+  name: 'Answers yes / no only',
+  api: 'prompt',
+  input: "Answer with only the single word 'yes' or 'no'. Is the sky blue on a clear day?",
+  rule: 'output is exactly "yes" or "no"',
+  // highlight-next-line
+  check: (output) => {
+    const a = output.trim().toLowerCase().replace(/[.!"']/g, '');
+    return { pass: a === 'yes' || a === 'no', reason: `got "${output.trim()}"` };
+  },
+};
+```
+```ts title="goldenSet.ts"
+type EvalApi = 'summarizer' | 'translator' | 'prompt';
+
+interface CheckResult {
+  pass: boolean;
+  reason: string; // short human reason, e.g. "27 words"
+}
+
+interface EvalCase {
+  id: string;
+  name: string;
+  api: EvalApi;
+  input: string;
+  rule: string;                            // plain language — a human reads this
+  summaryType?: 'tl;dr' | 'key-points' | 'teaser' | 'headline';
+  // highlight-next-line
+  check: (output: string) => CheckResult;  // regular code — no model involved
+}
+```
+</CodeTabs>
+
+The `rule` string is not decoration. It's the plain-language contract a teammate reads to know what the case even tests, sitting right next to the code that enforces it. Write it like a sentence, because someone who isn't you is going to read it at 2am.
+
+## Score it with plain code first
+
+Two ways to score an answer, and you reach for them in order. Start with the one that's free, fast, and 100% reproducible: rule-based checks — regular code, no model in the loop. Valid JSON, required keys, a length limit, a language, a number in range. Objective things a `for` loop can decide.
+
+Here are two of the shipped checks. A summary that has to come in non-empty and at or under forty words, and the yes/no answer that only passes when it's exactly that — not `Yes, on a clear day the sky is blue.`
+
+<CodeTabs>
+```js title="checks.js"
+const wordCount = (s) => s.trim().split(/\s+/).filter(Boolean).length;
+
+// A summary must be non-empty and stay under a word budget.
+function checkShortSummary(output) {
+  const words = wordCount(output);
+  return { pass: output.trim().length > 0 && words <= 40, reason: `${words} words` };
+}
+
+// A yes/no answer must be exactly that — the small model loves to pad it.
+function checkYesNo(output) {
+  const a = output.trim().toLowerCase().replace(/[.!"']/g, '');
+  return { pass: a === 'yes' || a === 'no', reason: `got "${output.trim()}"` };
+}
+```
+```ts title="checks.ts"
+const wordCount = (s: string): number => s.trim().split(/\s+/).filter(Boolean).length;
+
+function checkShortSummary(output: string): CheckResult {
+  const words = wordCount(output);
+  return { pass: output.trim().length > 0 && words <= 40, reason: `${words} words` };
+}
+
+function checkYesNo(output: string): CheckResult {
+  const a = output.trim().toLowerCase().replace(/[.!"']/g, '');
+  return { pass: a === 'yes' || a === 'no', reason: `got "${output.trim()}"` };
+}
+```
+</CodeTabs>
+
+No API key. No second model. No network. This is the core you run on every commit, and it's the only tier that stays green for reasons you fully control.
+
+## Judge the fuzzy stuff with a bigger model
+
+Rule-based checks can't score the things you actually care about half the time: tone, helpfulness, is-this-on-brand, toxicity. There's no regex for "polite." For those you need a judge model with a rubric — temperature 0, structured output, one PASS/FAIL per answer with a reason.
+
+```js title="judge.js"
+// Grade ONE answer against a rubric. Not Gemini Nano — a bigger judge.
+const verdict = await judge.generate({
+  system: 'You grade answers PASS or FAIL against the rubric. Reply {"label","rationale"}.',
+  rubric: 'The reply is polite and invents no facts.',
+  answer: output,
+  temperature: 0, // deterministic grading — you want the same verdict twice
+});
+```
+
+Two honest catches, and they're the difference between an eval and a comfortable lie.
+
+Don't let Gemini Nano judge itself. It's too small to grade reliably, you can't set `temperature` on the web so it won't even be consistent, and a model grading its own output is biased in the one direction you can't afford. Use a bigger judge — a local model like Ollama if you have to stay offline, or a cloud model behind an env flag as a separate, non-blocking expert tier. Judge quality is a real cost; pay it out of band, not on the critical path.
+
+Validate the judge before you trust it. Hand it a labelled set a human already graded and check its verdicts agree with the human on 85%+ of them. A judge you never checked is just a second opinion you didn't ask for, dressed up as a metric.
+
+## Run it many times for a stability rate
+
+One run of a non-deterministic model is an anecdote. Ten runs is data.
+
+Because the output varies, you run each case 5 to 10 times, score every run, and report the ratio. And here's the part people get wrong, the one that quietly poisons the number: separate the run that threw from the run that was wrong. `ERROR` means your harness broke — the API wasn't available, the network died, `create()` rejected. `FAIL` means the model gave a bad answer. Count the errors as failures and a perfectly good model looks broken because your CI runner was.
+
+<CodeTabs>
+```js title="stabilityRate.js"
+async function stabilityRate(run, check, n = 10) {
+  let passed = 0, errored = 0;
+  for (let i = 0; i < n; i++) {
+    try {
+      const out = await run();
+      if (check(out).pass) passed++;
+    } catch {
+      errored++;                 // infra problem → ERROR, not FAIL
+    }
+  }
+  // highlight-next-line
+  const scored = n - errored;    // a FAIL you didn't earn would skew the number
+  return { passed, scored, rate: scored ? passed / scored : 1 };
+}
+// → "passed 8/10 → 80% stable"
+```
+```ts title="stabilityRate.ts"
+interface Stability { passed: number; scored: number; rate: number; }
+
+async function stabilityRate(
+  run: () => Promise<string>,
+  check: (output: string) => CheckResult,
+  n = 10,
+): Promise<Stability> {
+  let passed = 0, errored = 0;
+  for (let i = 0; i < n; i++) {
+    try {
+      const out = await run();
+      if (check(out).pass) passed++;
+    } catch {
+      errored++;                 // infra problem → ERROR, not FAIL
+    }
+  }
+  // highlight-next-line
+  const scored = n - errored;    // a FAIL you didn't earn would skew the number
+  return { passed, scored, rate: scored ? passed / scored : 1 };
+}
+```
+</CodeTabs>
+
+The demo runs exactly this: pick a case, run it eight times, and watch the dots land green, red, or grey. Green passed, red failed, grey errored — and grey never touches the percentage. `scored = passed + failed`, and the rate is `passed / scored`. The errors get their own count off to the side, where they belong.
+
+## Run it against window.ai in CI
+
+Here's the catch that surprises everyone the first time. `window.ai` — the whole built-in AI surface — only exists inside a browser tab. It's not in Node. So your test runner can't `import` it, stub a fetch, and call it a day. You drive a real browser instead, and you run the model inside the page.
+
+```js title="eval.bridge.js"
+// Node test → real Chrome via Playwright. Bundled Chromium lacks the model,
+// so launch installed Chrome against a profile that already has Nano warmed.
+const ctx = await chromium.launchPersistentContext(NANO_PROFILE, {
+  channel: 'chrome',   // real Chrome, not bundled Chromium
+  headless: false,     // headful is safest for Nano; wrap it in xvfb on a Linux runner
+});
+const page = await ctx.newPage();
+
+const output = await page.evaluate(async (text) => {
+  const s = await LanguageModel.create({ outputLanguage: 'en' });
+  const r = await s.prompt(text);
+  s.destroy();
+  return r;
+}, input);
+// …then score `output` and compute the stability rate back in Node (Vitest, etc.)
+```
+
+Enable the model once in that profile's flags and let it download — a pre-warmed profile is far more reliable than passing command-line flags on every run.
+
+Now the honest part, because the bridge tempts you to run everything everywhere. Real Gemini Nano won't run on a standard GitHub-hosted runner. It needs around 22 GB of free disk, a GPU or a 16 GB-RAM tier, and a multi-gigabyte download on every single job. So you split the suite by where it can actually run.
+
+| When | What runs | Model |
+|---|---|---|
+| Every PR (hosted runner) | rule-based evals + a mocked `window.ai` | none |
+| Nightly (self-hosted, GPU, pre-warmed profile) | real stability-rate evals | real Nano |
+| Local dev | the full suite | real Nano |
+| Judge tier (optional) | fuzzy rubrics (local Ollama / cloud) | non-blocking |
+
+Every PR gets the fast, deterministic, model-free core so nobody waits on a GPU to merge a typo. Nightly, on a machine that actually has the hardware, runs the real stability evals against real Nano. The judge tier stays optional and non-blocking, because a flaky cloud call should never be the thing that reddens a green build.
+
+One more, and it's the one that saves you months. Chrome auto-updates Nano under you — silently, on its own schedule, with no version you can even query from JS. So pin your eval suite and re-run it on every Chrome release. A golden-set regression is the early warning you get before your users file the bug.
+
+## Pick a framework that fits
+
+You don't need much, and you don't need Python. Three options that reach the tab:
+
+- Vitest + Playwright — write the bridge yourself. Most control, nothing new to learn.
+- evalite — a Vitest-based eval runner with a dashboard and CI thresholds on top.
+- promptfoo — a custom JS provider shells out to your Playwright bridge; you get assertions and a matrix UI for free.
+
+DeepEval and Ragas are fine tools that live in Python, where `window.ai` doesn't exist and never will. Without a bridge of their own, they can't reach the model. Skip them for on-device browser work.
+
+:::tip Try it
+Run it locally: open `16-evaluation/index.html` from the [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop Chrome. Or use the hosted demo: **[the mini-eval harness](https://windowai.danduh.me/evaluation)** (with the [API walkthrough](https://windowai.danduh.me/evaluation/docs)).
+
+Expected: you pick a golden-set case, choose how many runs, and watch each on-device call score green, red, or grey; the badge reports the stability rate, with errored runs counted apart from failures. Pick the `yes/no` Prompt case on a browser without the Prompt API and every run shows as ERROR, not FAIL — the point of the whole lesson, live.
+
+Requires: desktop Chrome with Gemini Nano available — see [Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of these come from scoring the model on a single run, or blaming the model for something your harness did.
+
+:::caution The stability rate looks terrible but the model is fine
+Symptom: a case you know works reports 30% stable, and the runs that "failed" were things like the API being unavailable.
+
+Cause: you counted `ERROR` as `FAIL`. Infra problems — a missing API, a rejected `create()`, a dead network — got folded into the denominator.
+
+Fix: score `passed / scored` where `scored = passed + failed`, and keep the error count separate. An infra error is not the model being wrong; report it on its own.
+:::
+
+:::caution The eval imports window.ai in Node and everything is undefined
+Symptom: your test runner sees `LanguageModel` and `window.ai` as `undefined`, and every case errors before the model runs.
+
+Cause: the built-in AI globals only exist inside a browser tab. Node has no `window.ai`, so a plain `import` can't reach it.
+
+Fix: drive a real browser with Playwright — `channel: 'chrome'`, not bundled Chromium — and run the call inside `page.evaluate`, then score the returned string back in Node.
+:::
+
+:::caution The judge passes everything
+Symptom: your LLM-as-judge tier grades almost every answer PASS, including ones you know are bad.
+
+Cause: you're judging with a model that's too weak or biased — often Gemini Nano grading its own output, with no temperature control and a built-in incentive to like what it wrote.
+
+Fix: use a bigger judge (a local Ollama model or a cloud model behind a flag), grade at temperature 0, and validate the judge against a human-labelled set until it agrees 85%+ of the time.
+:::
+
+:::caution Green for weeks, then a wave of failures overnight
+Symptom: a suite that passed for a month suddenly drops ten points, and nothing in your code changed.
+
+Cause: Chrome shipped a new Gemini Nano build. The model moved under you, and you can't query the version to prove it.
+
+Fix: this is the feature, not the bug — it's exactly why you pinned the suite. Re-run your golden set on every Chrome release so the regression shows up in CI instead of in a support ticket.
+:::
+
+## Recap
+
+- A golden set is trusted inputs paired with a plain-language `rule` and a deterministic `check` that returns `{ pass, reason }` — 8 to 30 to start, a thousand before a big release.
+- Score with rule-based checks first: regular code, no model, 100% reproducible, safe to run on every commit. Reach for an LLM-as-judge only for fuzzy criteria.
+- Don't let Nano judge itself, and validate any judge against a human-labelled set before you trust its numbers.
+- Run each case 5 to 10 times for a stability rate, and count `ERROR` apart from `FAIL` so a broken runner can't make a good model look bad.
+- `window.ai` lives only in a tab, so evaluate through a Playwright bridge; split PR, nightly, and local by what real Nano can run, and re-run the suite on every Chrome release.
+
+Everyone else grades a dice roll on one throw.
+
+## Next steps
+
+- [Observability & tracing](./observability-and-tracing) — see every call before you measure whether it was any good; the two are one job.
+- [The Prompt API (LanguageModel)](./prompt-api) — the model you're driving through the bridge, with the create options your eval harness sets.
+- [Shipping & compatibility](./shipping-and-compatibility) — pin the versions your golden set runs against before any of this goes to production.
 
 ---
 
-Next: [Shipping & the compatibility matrix](./shipping-and-compatibility).
+Next: [Shipping it: the compatibility matrix](./shipping-and-compatibility).
