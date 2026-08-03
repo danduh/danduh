@@ -1,35 +1,391 @@
 ---
 title: "Observability & tracing"
-description: "Instrument on-device AI with no backend: latency, token usage, download and session lifecycle, per-tool telemetry, and Core Web Vitals impact."
+description: "Instrument on-device AI with no backend: a client-side tracer that captures latency, TTFT, context usage, and errors, then ships OpenTelemetry gen_ai.* spans."
 sidebar_position: 15
 sidebar_label: Observability & tracing
 keywords:
   - AI observability
-  - tracing
-  - on-device AI
-  - performance monitoring
-  - telemetry
+  - on-device AI tracing
+  - OpenTelemetry gen_ai
+  - TTFT
+  - structured logging
 ---
 
 <LessonSchema
   name="Observability & tracing"
-  description="Instrument on-device AI with no backend: latency, token usage, download and session lifecycle, per-tool telemetry, and Core Web Vitals impact."
+  description="Instrument on-device AI with no backend: a client-side tracer that captures latency, TTFT, context usage, and errors, then ships OpenTelemetry gen_ai.* spans."
   path="/courses/chrome-built-in-ai/observability-and-tracing"
 />
 
 # Observability & tracing
 
-{/* Status: skeleton — beats only.
-    NOTE: not covered by the window-ai source docs — drafted from domain
-    positions; needs a review/fact pass before publishing. */}
+Ok. Observability for a cloud model is handed to you in the response: logprobs, the token bill, the model version, a server-side span, all riding back over the wire. On-device inference hands you none of it. No request over the wire. No confidence score. No per-response token bill. No model version to even ask about.
 
-## Why observability is different with no backend
-## What to measure (latency, tokens, downloads, session lifecycle, availability)
-## performance.mark / performance.measure around AI calls
-## Structured logging in the browser
-## Instrumenting WebMCP tool calls (the API surfaces no telemetry)
-## The Core Web Vitals impact of a local model
-## A minimal client-side tracing pattern
+So you build the trace yourself.
+
+Client-side, from the handful of signals Chrome actually exposes — about thirty lines of code — and nothing leaves the device unless you decide to send it. This lesson stacks that tracer up in four levels: a `console.log`, a structured span with the same shape every call, a `traceStream` wrapper that captures real latency and time-to-first-token, then shipping the span as OpenTelemetry `gen_ai.*` attributes.
+
+## What you'll build
+
+- Manufacture on-device AI observability from the few signals Chrome gives you — latency, TTFT, output size, context usage, and errors.
+- Define one `AiSpan` shape and emit the same record on every call, then fan it out to sinks with `addSink`.
+- Wrap a streaming call in `traceStream` so it stays a pass-through — the caller renders incrementally while the span captures TTFT and output chars.
+- Map an `AiSpan` onto OpenTelemetry `gen_ai.*` attributes as an `INTERNAL` span, and know the honest limits of shipping it anywhere.
+- Gate tracing behind an opt-in and keep raw prompts out of it, so production visitors pay nothing and nothing private leaks.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on, and a call worth tracing. This page builds on [the Prompt API](./prompt-api) and streams from the [Summarizer](./summarizer), so it helps to have run one already. New here? Start with [Setup & the availability lifecycle](./setup-and-availability), and keep [the compatibility matrix](./shipping-and-compatibility) handy for what's stable where. It assumes you already know the four availability states — it won't re-teach them.
+:::
+
+## What you can actually capture
+
+So what does Chrome give you to work with? Not much, and that scarcity is the whole lesson. There's no server span to read, so every row below is something you measure in your own JavaScript, around your own `await`.
+
+| Signal | How you get it | Which APIs |
+|---|---|---|
+| Wall-clock latency | `performance.now()` around the `await` | all |
+| Time to first token (TTFT) | first chunk of a `*Streaming()` call | streaming APIs |
+| Output size — a char proxy, not tokens | accumulate `chunk.length` | streaming APIs |
+| Context / token accounting | `session.contextUsage` and `session.contextWindow` | Prompt API |
+| Availability | `availability()` state | all |
+| Download progress | `monitor(m)` then `downloadprogress`, `e.loaded` is 0..1 | all |
+| Errors | `DOMException.name` (`QuotaExceededError`, `AbortError`…) | all |
+| Real confidence | `{ detectedLanguage, confidence }` | LanguageDetector only |
+
+That last row is the tell. The only genuine confidence number in the entire built-in AI surface comes from `LanguageDetector`. The Prompt API, the Summarizer, the Translator, the lot — no logprobs, no per-token probabilities, no output-token count, no way to query which Gemini Nano build answered you.
+
+Timings and sizes. That's the raw material, so that's what the tracer is built from.
+
+One footgun before you read any of it. The Prompt API renamed its accounting fields: `inputUsage` became `contextUsage`, `inputQuota` became `contextWindow`, and `measureInputUsage()` became `measureContextUsage()`. MDN and the Extensions docs still show the old names, and some Chrome builds still expose them. So read defensively — `session.contextUsage ?? session.inputUsage` — and stop guessing which browser you're on.
+
+## Level 0 — time the call with console.log
+
+Start dumb. Wrap the `await` in a `performance.now()` pair, log the milliseconds and the output length, walk away.
+
+```js title="level0.js"
+async function summarize(text) {
+  const summarizer = await Summarizer.create({ type: 'key-points', outputLanguage: 'en' });
+  const t0 = performance.now();
+  const result = await summarizer.summarize(text);
+  console.log('[ai] summarize', {
+    ms: Math.round(performance.now() - t0),
+    chars: result.length, // a char proxy — on-device gives you no token count
+  });
+  summarizer.destroy();
+  return result;
+}
+```
+
+Push a few of those into an array and the DevTools console hands you a table for free:
+
+```js title="level0-table.js"
+console.table(window.__aiSpans);
+```
+
+That's a real, working baseline. It's also ephemeral, unstructured, and impossible to ship. So give it a shape.
+
+## Level 1 — give every call a structured span
+
+One record per AI call, the same fields every time, so you can filter it, sort it, render it, and later map it onto anything. This is the `AiSpan`, and it carries only fields Chrome actually gives you — no invented confidence, no fake token bill.
+
+<CodeTabs>
+```js title="demo.js"
+// One record per AI call. Only signals Chrome actually exposes.
+function newSpan(api, op, stream) {
+  const id = (crypto.randomUUID && crypto.randomUUID()) || 'ai-' + Date.now();
+  return { id, ts: Date.now(), api, op, stream, latencyMs: 0, finish: 'ok' };
+  // later, optionally: ttftMs, outChars, contextUsage, contextWindow, errorName
+}
+```
+```ts title="demo.ts"
+type AiApi = 'prompt' | 'summarizer' | 'translator' | 'languageDetector';
+type AiFinish = 'ok' | 'error' | 'abort';
+
+// One traced on-device AI call. Every field is a signal Chrome gives you.
+interface AiSpan {
+  id: string;
+  ts: number;
+  api: AiApi;
+  op: string;            // 'prompt' | 'summarize' | 'translate'
+  stream: boolean;
+  latencyMs: number;
+  finish: AiFinish;
+  ttftMs?: number;       // streaming only: time to first chunk
+  outChars?: number;     // char proxy, NOT a token count
+  contextUsage?: number; // Prompt API only (drift-safe against inputUsage)
+  contextWindow?: number;
+  errorName?: string;    // DOMException.name on failure
+}
+
+function newSpan(api: AiApi, op: string, stream: boolean): AiSpan {
+  return { id: crypto.randomUUID(), ts: Date.now(), api, op, stream, latencyMs: 0, finish: 'ok' };
+}
+```
+</CodeTabs>
+
+A span nobody reads is a `console.log` with extra steps, so give it somewhere to go. A sink is just a function that takes a span; `addSink` registers one and hands you back an unsubscribe. Wrap each sink in a `try`/`catch` — a misbehaving sink must never break the actual call.
+
+```js title="sinks.js"
+const sinks = [];
+function addSink(sink) {              // register a consumer; returns an unsubscribe
+  sinks.push(sink);
+  return () => sinks.splice(sinks.indexOf(sink), 1);
+}
+function emit(span) {
+  for (const sink of sinks) {
+    try { sink(span); } catch { /* a broken sink never breaks the traced call */ }
+  }
+}
+
+// Two sinks, both get every span:
+addSink((span) => console.log('[ai]', span.api + '.' + span.op, span));
+addSink((span) => renderRow(span)); // your in-page panel, IndexedDB, whatever
+```
+
+## Level 2 — capture latency, TTFT, and errors
+
+Here's where the numbers get real. The stream is where the time goes, so the signal you actually want is the gap before the first chunk lands — time to first token — separate from the total. You measure it by wrapping the stream.
+
+`traceStream` takes the same `(api, op, session, run)` and returns a pass-through `ReadableStream`. The caller reads that stream exactly like the original and still renders chunk by chunk; the span emits once — when the stream ends, errors, or gets cancelled — carrying TTFT, accumulated `outChars`, the finish state, and the error name if it blew up.
+
+<CodeTabs>
+```js title="demo.js"
+function traceStream(api, op, session, run) {
+  const span = newSpan(api, op, true);
+  const t0 = performance.now();
+  let first = true, chars = 0, done = false;
+
+  const finalize = (finish, errorName) => {
+    if (done) return;
+    done = true;
+    span.latencyMs = performance.now() - t0;
+    span.outChars = chars;
+    span.finish = finish;
+    if (errorName) span.errorName = errorName;
+    try { // Prompt API only — drift-safe; getters can throw on a destroyed session
+      span.contextUsage = session?.contextUsage ?? session?.inputUsage;
+      span.contextWindow = session?.contextWindow ?? session?.inputQuota;
+    } catch { /* session gone — skip the numbers */ }
+    emit(span);
+  };
+
+  let reader;
+  return new ReadableStream({
+    start(controller) {
+      try { reader = run().getReader(); }
+      catch (e) { finalize(classify(e), e && e.name); controller.error(e); }
+    },
+    async pull(controller) {
+      if (!reader) return;
+      try {
+        const { done: end, value } = await reader.read();
+        if (end) { finalize('ok'); controller.close(); return; }
+        // highlight-next-line
+        if (first) { span.ttftMs = performance.now() - t0; first = false; } // TTFT
+        chars += value.length;
+        controller.enqueue(value); // pass the chunk straight through — caller still renders
+      } catch (e) { finalize(classify(e), e && e.name); controller.error(e); }
+    },
+    cancel(reason) { finalize('abort', reason && reason.name); return reader && reader.cancel(reason); },
+  });
+}
+
+const classify = (e) => (e && e.name) === 'AbortError' ? 'abort' : 'error';
+```
+```ts title="demo.ts"
+function traceStream(
+  api: AiApi,
+  op: string,
+  session: unknown,
+  run: () => ReadableStream<string>,
+): ReadableStream<string> {
+  const span = newSpan(api, op, true);
+  const t0 = performance.now();
+  let first = true, chars = 0, done = false;
+
+  const finalize = (finish: AiFinish, errorName?: string): void => {
+    if (done) return;
+    done = true;
+    span.latencyMs = performance.now() - t0;
+    span.outChars = chars;
+    span.finish = finish;
+    if (errorName) span.errorName = errorName;
+    try {
+      const s = session as { contextUsage?: number; contextWindow?: number; inputUsage?: number; inputQuota?: number };
+      span.contextUsage = s?.contextUsage ?? s?.inputUsage;
+      span.contextWindow = s?.contextWindow ?? s?.inputQuota;
+    } catch { /* session gone — skip the numbers */ }
+    emit(span);
+  };
+
+  let reader: ReadableStreamDefaultReader<string> | undefined;
+  return new ReadableStream<string>({
+    start(controller) {
+      try { reader = run().getReader(); }
+      catch (e) { finalize(classify(e), (e as { name?: string })?.name); controller.error(e); }
+    },
+    async pull(controller) {
+      if (!reader) return;
+      try {
+        const { done: end, value } = await reader.read();
+        if (end) { finalize('ok'); controller.close(); return; }
+        // highlight-next-line
+        if (first) { span.ttftMs = performance.now() - t0; first = false; } // TTFT
+        chars += value.length;
+        controller.enqueue(value);
+      } catch (e) { finalize(classify(e), (e as { name?: string })?.name); controller.error(e); }
+    },
+    cancel(reason) { finalize('abort', (reason as { name?: string })?.name); return reader?.cancel(reason); },
+  });
+}
+
+const classify = (e: unknown): AiFinish =>
+  (e as { name?: string })?.name === 'AbortError' ? 'abort' : 'error';
+```
+</CodeTabs>
+
+The one-shot calls — `prompt()`, `summarize()`, a plain `await` — get the simpler sibling, `traceCall`, which times the promise, reads `result.length` for `outChars`, records the error, and re-throws it unchanged. Same span, no stream plumbing.
+
+Errors are first-class here, not an afterthought. On-device, the most useful thing you can log is why it failed: `QuotaExceededError` (input over the window — it carries `requested` and `contextWindow`), `NotSupportedError` (the feature can't run on this Chrome), and `AbortError` when someone cancels. Capture `DOMException.name` and you've turned a silent "works but subtly wrong" into a searchable field.
+
+## Level 3 — ship it as OpenTelemetry spans
+
+You can keep every span local forever — an in-page panel, IndexedDB, done, no backend. But if you want the `gen_ai.*` vocabulary the rest of the industry already speaks, it ports cleanly. The tooling mostly doesn't, but the attribute names do.
+
+Emit an `INTERNAL` span, not a client span — the model runs in-process, there's no `server.address` to point at. Then map the fields you captured onto the GenAI semantic conventions.
+
+<CodeTabs>
+```js title="demo.js"
+function genAi(span) {
+  const attributes = {
+    'gen_ai.operation.name': span.op,
+    'gen_ai.provider.name': 'chrome.builtin',
+    'gen_ai.request.model': 'gemini-nano',       // Chrome exposes no version
+    'gen_ai.request.stream': span.stream,
+    'gen_ai.response.finish_reasons': [span.finish],
+  };
+  if (span.ttftMs != null)
+    attributes['gen_ai.response.time_to_first_chunk'] = Number((span.ttftMs / 1000).toFixed(3));
+  if (span.contextUsage != null)
+    attributes['gen_ai.usage.input_tokens'] = span.contextUsage; // approximate (cumulative)
+  if (span.errorName) attributes['error.type'] = span.errorName;
+  // highlight-next-line
+  return { name: 'gen_ai.' + span.op, kind: 'INTERNAL', attributes };
+}
+```
+```ts title="demo.ts"
+function genAi(span: AiSpan): { name: string; kind: 'INTERNAL'; attributes: Record<string, unknown> } {
+  const attributes: Record<string, unknown> = {
+    'gen_ai.operation.name': span.op,
+    'gen_ai.provider.name': 'chrome.builtin',
+    'gen_ai.request.model': 'gemini-nano',       // Chrome exposes no version
+    'gen_ai.request.stream': span.stream,
+    'gen_ai.response.finish_reasons': [span.finish],
+  };
+  if (span.ttftMs != null)
+    attributes['gen_ai.response.time_to_first_chunk'] = Number((span.ttftMs / 1000).toFixed(3));
+  if (span.contextUsage != null)
+    attributes['gen_ai.usage.input_tokens'] = span.contextUsage; // approximate (cumulative)
+  if (span.errorName) attributes['error.type'] = span.errorName;
+  // highlight-next-line
+  return { name: `gen_ai.${span.op}`, kind: 'INTERNAL', attributes };
+}
+```
+</CodeTabs>
+
+Two honest caveats baked into that mapping. `gen_ai.request.model` is hard-coded to `'gemini-nano'` because Chrome won't tell you the build number — provenance is unobservable from JS. And `gen_ai.usage.input_tokens` is the Prompt API's cumulative `contextUsage`, which is approximate and session-wide, not a per-call output count. Ship it, but label it in your head as a proxy.
+
+Now, "ship it somewhere" has a catch at every door. Here's the state of the ecosystem, no spin.
+
+| Target | No-backend, in the browser? | Catch |
+|---|---|---|
+| `console.log` / `console.table` | yes | ephemeral |
+| In-page panel + IndexedDB | yes | you build the UI |
+| OpenTelemetry `gen_ai.*`, local exporter | yes | OTLP export needs a collector (CORS) |
+| Sentry | yes, to a DSN | data leaves the device |
+| Langfuse | scores only | full tracing needs a Node backend |
+
+The nuance behind the rows: a `ConsoleSpanExporter` or an IndexedDB exporter keeps OpenTelemetry fully local, but pushing to an OTLP collector from a browser is a CORS-and-CSP minefield that needs a running collector — a backend. Sentry runs client-side and takes manual spans, but every one of them ships to a DSN and off the machine. Langfuse's browser SDK is scores-and-feedback only — perfect for a thumbs-up button on a trace some server already created, useless for tracing on its own.
+
+One more thing before any of this ships: make tracing opt-in. Off by default means production visitors never pay for a wrapper they don't need, and nothing gets captured unless a developer turns it on.
+
+```js title="opt-in.js"
+function isTracingEnabled() {
+  if (typeof globalThis.__AI_TRACE__ === 'boolean') return globalThis.__AI_TRACE__;
+  try { return localStorage.getItem('ai:trace') === '1'; } catch { return false; }
+}
+
+// In your call site: only wrap when tracing is on — zero overhead otherwise.
+const stream = isTracingEnabled()
+  ? traceStream('summarizer', 'summarize', s, () => s.summarizeStreaming(text))
+  : s.summarizeStreaming(text);
+```
+
+## Keep raw prompts out of the trace
+
+Everything through Level 2 stays on the device. That's not a nice-to-have — it's the entire reason someone picked on-device AI over a cloud API in the first place, and a sloppy trace throws it away.
+
+The rule is short. Log sizes and timings, not content. `outChars` and `latencyMs`, yes. The user's actual prompt and the model's actual answer, no — not by default. The moment you add Sentry, Langfuse, or an OTLP collector, spans leave the machine, so make every external sink an explicit opt-in the user or the developer chooses, never the default path. Keep the content local and you keep the promise you shipped on.
+
+:::tip Try it
+Run it locally: open `15-observability-and-tracing/index.html` from the [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop Chrome. Or use the hosted demo: **[on-device trace viewer](https://windowai.danduh.me/observability)** (with the [API walkthrough](https://windowai.danduh.me/observability/docs)).
+
+Expected: you run a traced Summarizer call; the summary streams in, and the same captured span renders three ways side by side — the `console.log` line, the structured `AiSpan` object, and its OpenTelemetry `gen_ai.*` attributes. Switch to the Prompt API to watch `contextUsage` show up.
+
+Requires: desktop Chrome with Gemini Nano available — see [Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of these come from tracing the wrong kind of call, or expecting a signal on-device simply doesn't emit.
+
+:::caution contextUsage is always undefined
+Symptom: your span never carries `contextUsage` or `contextWindow`.
+
+Cause: one of three. You're tracing the Summarizer or Translator, which don't expose context accounting — that's Prompt API only. Or you read it after `destroy()`, and the getter threw. Or the build still uses the old `inputUsage` names.
+
+Fix: read drift-safe with `session.contextUsage ?? session.inputUsage`, read it before you destroy the session, and expect it to be absent on every API except the Prompt API.
+:::
+
+:::caution TTFT is missing or equals latency
+Symptom: `ttftMs` is undefined, or it lands within a millisecond of `latencyMs`.
+
+Cause: you wrapped a one-shot `prompt()` or `summarize()` with `traceStream`, or the whole reply arrived in a single chunk. TTFT only exists when there's a stream to be first in.
+
+Fix: use `traceStream` on the `*Streaming()` variant and `traceCall` on the one-shot. If TTFT still hugs latency, the output was short enough to arrive in one chunk — that's real, not a bug.
+:::
+
+:::caution The stream renders nothing after wrapping
+Symptom: you pipe a call through `traceStream` and the UI stays blank.
+
+Cause: you consumed the stream inside the wrapper, or you never read the stream it returned. The wrapper is a pass-through, not a sink.
+
+Fix: read the returned stream — `for await` or `getReader()` — and render each chunk yourself. The span emits on its own when the stream ends; your job is still to render it.
+:::
+
+:::caution outChars doesn't match your token dashboard
+Symptom: `outChars` is nowhere near the token count you expected.
+
+Cause: `outChars` is a character count — accumulated `chunk.length` — not tokens. On-device inference gives you no output-token number at all.
+
+Fix: treat `outChars` as a proxy for output size. The only token-ish figure available is the Prompt API's `contextUsage`, and even that is cumulative and approximate.
+:::
+
+## Recap
+
+- On-device inference has no server span — no logprobs, no confidence, no token bill, no model version. You manufacture the trace from Chrome's own signals: latency, TTFT, output chars, context usage, and errors.
+- One `AiSpan` shape per call, fanned out through `addSink`, so every call reads the same and a broken sink never breaks the call.
+- `traceStream` wraps a `*Streaming()` call as a pass-through — the caller still renders incrementally while the span captures TTFT and `outChars`; `traceCall` handles the one-shot.
+- Map the span onto OpenTelemetry `gen_ai.*` as an `INTERNAL` span to ship it; the honest matrix tells you where each backend costs you a round-trip or a leak.
+- Everything through Level 2 is local; gate tracing behind an opt-in, log sizes and timings, and keep raw prompts and responses on the device.
+
+Everyone else is paying Datadog to trace a call that never left the tab.
+
+## Next steps
+
+- [Evaluation](./evaluation) — once you can see every call, measure whether the output was any good.
+- [The Prompt API (LanguageModel)](./prompt-api) — where `contextUsage` and `contextWindow` come from, and the naming drift you read around.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable across the browser matrix before you wire telemetry to any of it.
 
 ---
 
