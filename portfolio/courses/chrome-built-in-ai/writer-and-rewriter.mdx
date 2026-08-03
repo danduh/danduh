@@ -1,33 +1,447 @@
 ---
 title: "Writer & Rewriter"
-description: Generate new text from a task description with the Writer API, transform existing text — tone, length, format — with the Rewriter API, and stream both for a responsive UI.
+description: "Generate new text with Chrome's Writer API and reshape existing text with the Rewriter API — control tone, format, and length, and stream both on-device."
 sidebar_position: 9
 sidebar_label: Writer & Rewriter
 keywords:
   - Writer API
   - Rewriter API
   - content generation
+  - text rewriting
+  - sharedContext
   - on-device AI
-  - text transformation
 ---
 
 <LessonSchema
   name="Writer & Rewriter"
-  description="Generate new text with the Writer API, transform existing text — tone, length, format — with the Rewriter API, and stream both for a responsive UI."
+  description="Generate new text with Chrome's Writer API and reshape existing text with the Rewriter API — control tone, format, and length, and stream both on-device."
   path="/courses/chrome-built-in-ai/writer-and-rewriter"
 />
 
 # Writer & Rewriter
 
-{/* Status: skeleton — beats only. */}
+So. Two more task APIs — `Writer` and `Rewriter` — and this pair earns its
+asterisk up front. Both are still stuck behind Chrome flags, which means that on
+most of the machines your code will ever run on, `availability()` looks you in
+the eye, says `unavailable`, and doesn't blink. Writer drafts new text from a
+brief. Rewriter takes text you already have and moves it — more formal, shorter,
+plain instead of markdown. Same Gemini Nano, different tuned system prompt. By
+the end of this page you'll gate each on its own `availability()`, stream a draft
+in a word at a time, reshape it, and degrade like an adult on every device where
+the flag was never flipped.
 
-## Writer: creating content from a task
-## Tone, format, and length
-## Rewriter: transforming existing text
-## Steering a rewrite with context
-## Streaming both
-## sharedContext, quota, and cleanup
+## What you'll build
+
+- Decide when `Writer`, `Rewriter`, or the raw Prompt API is the right tool.
+- Gate each API on its own `availability()` and handle the flag-gated `unavailable` reality.
+- Generate text from a brief with `Writer.create()` and `write()`, tuned by `tone`, `format`, and `length`.
+- Transform existing text with `Rewriter.create()` and `rewrite()`, steered per call with `context`.
+- Stream both with `writeStreaming()` and `rewriteStreaming()`, append the deltas, and `destroy()` on teardown.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on. New here? Work through
+[Setup & the availability lifecycle](./setup-and-availability) first, and keep
+[the compatibility matrix](./shipping-and-compatibility) handy for what's stable
+where. One thing to know going in: unlike the Summarizer, `Writer` and
+`Rewriter` are not stable. They're gated behind
+`chrome://flags/#writer-api-for-gemini-nano` and
+`chrome://flags/#rewriter-api-for-gemini-nano`, off by default, prototype-only.
+This page assumes you already know the four availability states.
+:::
+
+## Writer or Rewriter — and when to skip both
+
+Two APIs, one question: are you making text, or fixing text?
+
+Writer starts from nothing. You hand it a brief — "draft a release note for
+v2.0" — and it gives back a finished piece in the tone, format, and length you
+asked for. Rewriter starts from something. You hand it text that already exists
+and one axis to move it along — more formal, shorter, markdown instead of prose
+— and it respects the input while it shifts it. New text versus existing text.
+That's the whole split.
+
+So why not just prompt the raw model? You can. `LanguageModel` will happily
+write a release note if you ask it nicely. It'll also open with "Sure, here's a
+draft:", wrap the thing in a disclaimer, and editorialize about how exciting v2.0
+is — because a general chat model wants to chat. Writer and Rewriter don't chat.
+Their system prompts are tuned for one job: produce the text, in the shape
+requested, and stop.
+
+| You have… | You want… | Reach for |
+|---|---|---|
+| A brief, no source text | A finished draft | `Writer` |
+| Existing text | The same text, tone/length/format shifted | `Rewriter` |
+| Either | JSON, tools, images, or a conversation | [the Prompt API](./prompt-api) |
+
+Reach for the task API when the job fits its shape. Drop to the Prompt API when
+it doesn't. And when the job isn't actually a language job — when you're
+"generating" a UUID or "rewriting" a hex color — close the tab and write the
+three lines of code.
+
+## Check availability before you lean on it
+
+Same four-step loop as every API in this course: ask if it's there, create it,
+use it, tear it down. The asking matters more here than usual, because the honest
+answer is usually no.
+
+Feature-detect each global, then call its `availability()`. You get one of four
+states — `unavailable`, `downloadable`, `downloading`, `available`. On a stock
+Chrome with no flags set, both come back `unavailable`, and there's nothing your
+code can do about it except say so and point the user at the flag.
+
+<CodeTabs>
+```js title="demo.js"
+// Each API is its own bare global — feature-detect before you touch it.
+if (typeof Writer !== 'undefined') {
+  const status = await Writer.availability();
+  // "unavailable" | "downloadable" | "downloading" | "available"
+  // Flag off? This is "unavailable". Degrade — don't call create().
+}
+
+if (typeof Rewriter !== 'undefined') {
+  const status = await Rewriter.availability();
+  // Same four states, same flag reality.
+}
+```
+```ts title="demo.ts"
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+if (typeof Writer !== 'undefined') {
+  const status: Availability = await Writer.availability();
+  // Flag off? "unavailable". Degrade — don't call create().
+}
+
+if (typeof Rewriter !== 'undefined') {
+  const status: Availability = await Rewriter.availability();
+}
+```
+</CodeTabs>
+
+`availability()` can also throw on builds that half-know these APIs — wrap it in
+try/catch and treat a throw as `unavailable`. And don't poll it in a loop to
+"wait" for the flag; a loop can kick off a model download you never asked for.
+
+## Write from a brief
+
+Let's make some text. `Writer.create()` takes the shape you want — `tone`,
+`format`, `length` — plus an optional `sharedContext` that frames everything the
+instance writes. Then `write()` takes the brief and hands back the finished
+string. Wire the `monitor` on the first `create()`, because a cold machine
+blocks on the same multi-GB Nano download as every other API here.
+
+<CodeTabs>
+```js title="demo.js"
+const writer = await Writer.create({
+  tone: 'formal',        // 'formal' | 'neutral' | 'casual'
+  format: 'plain-text',  // 'markdown' | 'plain-text'
+  length: 'medium',      // 'short' | 'medium' | 'long'
+  monitor(m) {
+    m.addEventListener('downloadprogress', (e) => {
+      // e.loaded is a 0..1 fraction — there is no e.total in current builds
+      console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
+    });
+  },
+});
+
+const draft = await writer.write(
+  'Draft a release note for v2.0 of our CLI: adds a --json flag and Windows builds.'
+);
+console.log(draft);
+writer.destroy();
+```
+```ts title="demo.ts"
+type WriterTone = 'formal' | 'neutral' | 'casual';
+type WriterFormat = 'markdown' | 'plain-text';
+type WriterLength = 'short' | 'medium' | 'long';
+
+const writer = await Writer.create({
+  tone: 'formal' as WriterTone,
+  format: 'plain-text' as WriterFormat,
+  length: 'medium' as WriterLength,
+  monitor(m: AICreateMonitor) {
+    m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+      console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
+    });
+  },
+});
+
+const draft: string = await writer.write(
+  'Draft a release note for v2.0 of our CLI: adds a --json flag and Windows builds.'
+);
+console.log(draft);
+writer.destroy();
+```
+</CodeTabs>
+
+| Option | Values | Default |
+|---|---|---|
+| `tone` | `'formal'`, `'neutral'`, `'casual'` | `'neutral'` |
+| `format` | `'markdown'`, `'plain-text'` | `'markdown'` |
+| `length` | `'short'`, `'medium'`, `'long'` | `'medium'` |
+
+Pick what you'd pick for a colleague and adjust from there. `casual` for the
+changelog nobody reads, `formal` for the email legal will. The model won't argue.
+
+## Rewrite what you already have
+
+Rewriter is the mirror image. `create()` with `tone`, `length`, `format`, then
+`rewrite()` with the text — and here's the twist that makes it useful: every
+option defaults to `as-is`. That's the point. You're not regenerating the text,
+you're nudging one axis and leaving the rest alone. `tone: 'more-formal'` and
+nothing else means "same message, same length, same structure, just less casual."
+
+<CodeTabs>
+```js title="demo.js"
+const rewriter = await Rewriter.create({
+  tone: 'more-formal',  // 'as-is' | 'more-formal' | 'more-casual'
+  length: 'as-is',      // 'as-is' | 'shorter' | 'longer'
+  format: 'as-is',      // 'as-is' | 'markdown' | 'plain-text'
+});
+
+// Per-call context steers one rewrite without a new instance:
+const polished = await rewriter.rewrite(
+  'hey can u send me the doc when u get a sec',
+  { context: 'This is going to a senior executive.' }
+);
+console.log(polished); // "Hi — could you send me the document when you have a moment?"
+rewriter.destroy();
+```
+```ts title="demo.ts"
+type RewriterTone = 'as-is' | 'more-formal' | 'more-casual';
+type RewriterLength = 'as-is' | 'shorter' | 'longer';
+type RewriterFormat = 'as-is' | 'markdown' | 'plain-text';
+
+const rewriter = await Rewriter.create({
+  tone: 'more-formal' as RewriterTone,
+  length: 'as-is' as RewriterLength,
+  format: 'as-is' as RewriterFormat,
+});
+
+const polished: string = await rewriter.rewrite(
+  'hey can u send me the doc when u get a sec',
+  { context: 'This is going to a senior executive.' }
+);
+console.log(polished);
+rewriter.destroy();
+```
+</CodeTabs>
+
+The per-call `context` is the escape hatch. Same rewriter instance, different
+framing per input — "this is for a child," "this is going in a legal filing,"
+"keep every product name exact." You set the axis once at `create()` and steer
+the individual rewrite with a sentence.
+
+## Stream the deltas
+
+Both APIs stream, and both stream the way the rest of the course does. `write()`
+and `rewrite()` hand you the whole string when they finish. `writeStreaming()`
+and `rewriteStreaming()` hand you a `ReadableStream` you loop with `for await` —
+and the chunks are deltas, not the full text each time.
+
+Append. Don't replace.
+
+<CodeTabs>
+```js title="demo.js"
+// Writer, streamed:
+let out = '';
+const writeStream = writer.writeStreaming(brief);
+for await (const chunk of writeStream) {
+  out += chunk; // deltas — append, never replace
+  render(out);
+}
+
+// Rewriter, streamed, with per-call context:
+let reshaped = '';
+const rewriteStream = rewriter.rewriteStreaming(text, { context: 'For the changelog.' });
+for await (const chunk of rewriteStream) {
+  reshaped += chunk; // same deal — accumulate
+  render(reshaped);
+}
+```
+```ts title="demo.ts"
+let out = '';
+const writeStream: ReadableStream<string> = writer.writeStreaming(brief);
+for await (const chunk of writeStream) {
+  out += chunk; // deltas — append, never replace
+  render(out);
+}
+
+let reshaped = '';
+const rewriteStream: ReadableStream<string> = rewriter.rewriteStreaming(text, {
+  context: 'For the changelog.',
+});
+for await (const chunk of rewriteStream) {
+  reshaped += chunk;
+  render(reshaped);
+}
+```
+</CodeTabs>
+
+Treat a delta like a snapshot and your UI flickers through the last three words
+of every draft. `text += chunk`. Every time.
+
+## Keep the voice with sharedContext
+
+This is where a task API stops sounding like a task API and starts sounding like
+your product. `sharedContext` is a string you set once at `create()` that rides
+along on every call the instance makes — a house-style note the model reads
+before it writes a single word. Set it to your brand voice and every draft comes
+out wearing it.
+
+<CodeTabs>
+```js title="demo.js"
+// A writer that always sounds like your docs:
+const docsWriter = await Writer.create({
+  tone: 'neutral',
+  format: 'markdown',
+  // highlight-next-line
+  sharedContext: 'Developer docs for a CLI. Terse, second person, no marketing adjectives.',
+});
+
+// A rewriter that protects the things you can't get wrong:
+const safeRewriter = await Rewriter.create({
+  tone: 'more-formal',
+  // highlight-next-line
+  sharedContext: 'Keep every product name, flag, and version number exactly as written.',
+});
+```
+```ts title="demo.ts"
+const docsWriter = await Writer.create({
+  tone: 'neutral',
+  format: 'markdown',
+  // highlight-next-line
+  sharedContext: 'Developer docs for a CLI. Terse, second person, no marketing adjectives.',
+});
+
+const safeRewriter = await Rewriter.create({
+  tone: 'more-formal',
+  // highlight-next-line
+  sharedContext: 'Keep every product name, flag, and version number exactly as written.',
+});
+```
+</CodeTabs>
+
+Without it, the output is competent and anonymous — the kind of paragraph that
+reads the same whether it's fronting a Stripe changelog, a Linear release, or a
+Vercel deploy note. With it, the draft lands in your voice on the first try. One
+string. Load-bearing.
+
+## Destroy both
+
+Every live writer and rewriter pins the model in GPU memory, same as a
+`LanguageModel` session, and Nano is not small. Spin up a dozen and forget them
+and you'll starve whatever feature reaches for the model next. So free them the
+moment you're done, and wire teardown so a closed tab doesn't leak.
+
+Free it.
+
+<CodeTabs>
+```js title="demo.js"
+writer.destroy();
+rewriter.destroy();
+
+// Wire teardown so a closed tab doesn't leak GPU memory:
+window.addEventListener('beforeunload', () => {
+  writer?.destroy();
+  rewriter?.destroy();
+});
+
+// Writing or rewriting after destroy() throws — create a fresh instance instead.
+```
+```ts title="demo.ts"
+writer.destroy();
+rewriter.destroy();
+
+window.addEventListener('beforeunload', () => {
+  writer?.destroy();
+  rewriter?.destroy();
+});
+
+// Writing or rewriting after destroy() throws — create a fresh instance instead.
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `09-writer-and-rewriter/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo:
+**[Writer & Rewriter playground](https://windowai.danduh.me/writer/writer-demo)**
+(with the [API walkthrough](https://windowai.danduh.me/writer/writer-api-documentation)).
+
+Expected: with the flags enabled, you type a brief and watch a draft stream into
+the Writer panel; paste text into the Rewriter panel, pick `more-formal`, and
+watch the same message come back stiffer a word at a time. With the flags off,
+each panel tells you exactly which flag to flip.
+
+Requires: desktop Chrome with the Writer and Rewriter flags enabled and Gemini
+Nano available — see [Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of these come back to one root cause: these APIs aren't stable yet, and
+you're building on a flag. Plan for the flag being off, and the rest is the usual
+Nano housekeeping.
+
+:::caution availability() returns "unavailable" on a healthy machine
+Symptom: `Writer.availability()` or `Rewriter.availability()` returns
+`unavailable` on a desktop that runs the Prompt API fine. Cause: these APIs are
+still origin-trial/flag-gated and off by default. Fix: enable
+`chrome://flags/#writer-api-for-gemini-nano` and
+`chrome://flags/#rewriter-api-for-gemini-nano` (plus
+`chrome://flags/#optimization-guide-on-device-model` set to
+`Enabled BypassPerfRequirement`), then restart Chrome. In production you can't
+flip a flag on a user's machine — gate the feature and degrade.
+:::
+
+:::caution create() hangs on the first call
+Symptom: the first `create()` sits there forever with no error. Cause: the
+multi-GB Gemini Nano download is running and you didn't wire a `monitor`, so
+nothing reports progress. Fix: pass `monitor(m)` and read `e.loaded` (a 0..1
+fraction). `create()` resolves when the download finishes, not before.
+:::
+
+:::caution create() throws NotSupportedError
+Symptom: `create()` rejects before you hold an instance. Cause: an option value
+the build doesn't accept — often a Writer `tone` of `'more-formal'` (that's a
+Rewriter value) or a Rewriter `length` of `'medium'` (that's a Writer value).
+Fix: keep the two vocabularies straight. Writer tones are
+`formal`/`neutral`/`casual`; Rewriter tones are `as-is`/`more-formal`/`more-casual`.
+Probe a specific config with `availability({ tone, format, length })` before you
+commit to it.
+:::
+
+:::caution The streamed draft shows only the last few words
+Symptom: the panel flickers and ends on a fragment. Cause: you're replacing the
+output on each chunk, but `writeStreaming()` and `rewriteStreaming()` yield
+deltas, not the running total. Fix: accumulate — `text += chunk` — and render the
+growing string.
+:::
+
+:::caution QuotaExceededError on a long input
+Symptom: `write()` or `rewrite()` rejects with `QuotaExceededError` carrying
+`requested` and `quota`. Cause: the input is past the instance's `inputQuota`.
+Fix: check `measureInputUsage(text)` against `inputQuota` first, and split
+anything bigger into sections you run one at a time.
+:::
+
+## Recap
+
+- `Writer` makes new text from a brief; `Rewriter` transforms text you already have; the raw Prompt API covers everything else.
+- Both are flag-gated and not stable — `availability()` is usually `unavailable`, so gate and degrade.
+- `Writer.create()` takes `tone`/`format`/`length`; `Rewriter.create()` defaults every axis to `as-is` and moves only what you set.
+- `writeStreaming()` and `rewriteStreaming()` yield deltas you append; per-call `context` steers a single rewrite.
+- `sharedContext` frames every call in your voice; `destroy()` frees the model and doesn't come back.
+
+The rest of the industry pays monthly for a rewrite button.
+
+## Next steps
+
+- [The Proofreader API](./proofreader) — the third flagged task API, and the one that hands back positioned corrections instead of just fixed text.
+- [The Summarizer API](./summarizer) — the stable sibling: long text in, short text out, no flag required.
+- [The Prompt API (LanguageModel)](./prompt-api) — drop down to the raw model when you need JSON, tools, images, or a conversation.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable, what's still flagged, and what stays desktop-only.
 
 ---
 
-Next: [The Proofreader](./proofreader).
+Next: [The Proofreader API](./proofreader).

@@ -1,33 +1,522 @@
 ---
 title: "Live voice translation"
-description: Compose the Web Speech API with the Chrome Translator to transcribe a speaker and fan the transcript out into N live translation columns — per-sentence or rolling-interim — without a single network round-trip.
+description: "Build live voice translation in Chrome: transcribe with the Web Speech API, translate each sentence on-device with the Translator, and speak the result back."
 sidebar_position: 8
 sidebar_label: Live voice translation
 keywords:
-  - live translation
+  - live voice translation
   - Web Speech API
   - SpeechRecognition
+  - on-device Translator
   - real-time translation
-  - on-device AI
+  - speech to text
 ---
 
 <LessonSchema
   name="Live voice translation"
-  description="Compose the Web Speech API with the Chrome Translator to transcribe a speaker and fan the transcript out into N live translation columns."
+  description="Build live voice translation in Chrome: transcribe with the Web Speech API, translate each sentence on-device with the Translator, and speak the result back."
   path="/courses/chrome-built-in-ai/live-voice-translation"
 />
 
 # Live voice translation
 
-{/* Status: skeleton — beats only. */}
+Ok. You've got the on-device Translator working — paste a sentence, get it back in
+another language, no server in the loop. Live voice translation swaps that paste
+for a human talking: the Web Speech API turns the microphone into a stream of
+interim and final transcripts, and the `Translator` you already know turns each
+finalized sentence into a new language. By the end you'll capture speech,
+translate every sentence as it lands, optionally speak it back — and know exactly
+which half of that pipeline stays on the machine.
 
-## Two independent APIs, one bridge (language tags)
-## Live transcription with SpeechRecognition
-## Interim vs final results
-## Per-sentence mode
-## Rolling-interim mode (cancel the stale call)
-## Fanning out to N columns
-## Microphone permission and cleanup
+## What you'll build
+
+- Wire the Web Speech API (`SpeechRecognition`) with `continuous`, `interimResults`, and a BCP-47 `lang`, and read its result, error, and end events.
+- Split interim guesses from finalized sentences, committing only the finals to a transcript.
+- Feed each final sentence to the on-device `Translator` behind a per-pair `availability()` gate, with pack-download progress.
+- Translate the rolling interim too — debounced, cancelling the stale call with an `AbortController`.
+- Speak the translation back with `speechSynthesis`, then tear it down: `destroy()` the translator, `stop()` the recognizer.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on, and a microphone. New here? Start
+with [Setup & the availability lifecycle](./setup-and-availability), and check
+[the compatibility matrix](./shipping-and-compatibility) for where these ship.
+This lesson builds straight on top of
+[Translator + Language Detector](./translator-and-language-detector) — the
+`availability()` / `create()` / `destroy()` loop for the Translator is assumed
+here, not re-taught.
+:::
+
+## Bridge the two APIs with language tags
+
+These two APIs don't know each other exists. One shipped in 2013 for voice search;
+the other landed last year for on-device translation. They meet in exactly one
+place — the language tag. `SpeechRecognition` wants BCP-47, region and all:
+`en-US`, `fr-FR`, `pt-BR`. The `Translator` wants the short ISO code: `en`, `fr`,
+`pt`. So the entire bridge between speech and translation is stripping everything
+after the hyphen.
+
+One line. That's the integration.
+
+<CodeTabs>
+```js title="demo.js"
+// SpeechRecognition speaks BCP-47 ('en-US'); Translator wants the short code ('en').
+function toTranslatorLang(speechLang) {
+  return speechLang.split('-')[0];
+}
+
+toTranslatorLang('en-US');   // 'en'
+toTranslatorLang('zh-Hans'); // 'zh'
+```
+```ts title="demo.ts"
+function toTranslatorLang(speechLang: string): string {
+  return speechLang.split('-')[0];
+}
+```
+</CodeTabs>
+
+## Start listening with SpeechRecognition
+
+The entry point is `SpeechRecognition`, and Chrome still hands it to you behind the
+`webkitSpeechRecognition` prefix, thirteen years on — so you feature-detect both
+and take whichever answers. Then three switches decide how it behaves:
+`continuous` keeps it listening across pauses instead of quitting after one
+phrase, `interimResults` makes it emit partial guesses while the speaker is
+mid-word, and `lang` sets the BCP-47 language you're recognizing. Call `.start()`
+from a click — it needs a user gesture and a secure context — and the browser asks
+for the microphone.
+
+<CodeTabs>
+```js title="demo.js"
+const SpeechRecognitionCtor =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognitionCtor) {
+  // No Web Speech API here — degrade (see the Gotchas below).
+}
+
+const recognition = new SpeechRecognitionCtor();
+recognition.continuous = true;      // keep listening across pauses
+recognition.interimResults = true;  // emit partial guesses while speaking
+recognition.lang = 'en-US';         // BCP-47
+
+recognition.onend = () => { /* recognizer stopped — flip the UI back */ };
+recognition.start(); // needs a user gesture + mic permission + secure context
+```
+```ts title="demo.ts"
+// Web Speech types aren't in the DOM lib on every toolchain — declare a minimal shape.
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string; message?: string }) => void) | null;
+  onend: (() => void) | null;
+}
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  }
+}
+
+const SpeechRecognitionCtor =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognitionCtor) throw new Error('Web Speech API not supported');
+
+const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor();
+recognition.continuous = true;
+recognition.interimResults = true;
+recognition.lang = 'en-US';
+recognition.start();
+```
+</CodeTabs>
+
+## Split interim from final results
+
+`onresult` fires again and again as you talk, and each event carries the whole
+result list so far — so you start iterating at `event.resultIndex`, the first
+entry that changed since last time, and skip re-processing the finals you already
+handled. Each result exposes its best guess at `result[0].transcript` and a flag,
+`result.isFinal`. Finals are committed sentences. Append those. Interim results
+are the recognizer thinking out loud — a guess it will overwrite a syllable
+later, so you replace, never append.
+
+Append the finals. Redraw the interims.
+
+<CodeTabs>
+```js title="demo.js"
+recognition.onresult = (event) => {
+  let interim = '';
+  // Start at resultIndex — everything before it you've already committed.
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const result = event.results[i];
+    const transcript = result[0].transcript;
+    if (result.isFinal) {
+      onFinal(transcript.trim());   // committed — append to the transcript
+    } else {
+      interim += transcript;        // a guess-so-far — replace, don't append
+    }
+  }
+  if (interim.trim()) onInterim(interim);
+};
+
+recognition.onend = () => setListening(false);
+```
+```ts title="demo.ts"
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  length: number;
+  [index: number]: { transcript: string };
+}
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: { length: number; [index: number]: SpeechRecognitionResultLike };
+}
+
+recognition.onresult = (event: SpeechRecognitionEventLike) => {
+  let interim = '';
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const result = event.results[i];
+    const transcript = result[0].transcript;
+    if (result.isFinal) {
+      onFinal(transcript.trim());
+    } else {
+      interim += transcript;
+    }
+  }
+  if (interim.trim()) onInterim(interim);
+};
+```
+</CodeTabs>
+
+## Know which half is on-device
+
+Here's the part the privacy slide skips. The translation runs on-device — that
+half is true, and you can prove it with the network tab open. The transcription
+does not. Chrome's Web Speech API ships your microphone audio to a Google speech
+service, gets text back, and that round-trip is exactly why `SpeechRecognition`
+fires `error: 'network'` the second you go offline. Chrome is rolling out an
+on-device speech mode, but it isn't guaranteed on a given machine, so assume the
+audio can leave until you've checked. The honest split: your words go out as
+audio, come back as text, and only then does anything stay local.
+
+Say that before you put "nothing leaves your device" on a slide. Half of it does.
+
+<CodeTabs>
+```js title="demo.js"
+recognition.onerror = (event) => {
+  if (event.error === 'not-allowed') {
+    setStatus('Microphone blocked — allow it in the address bar and start again.');
+  } else if (event.error === 'network') {
+    // The transcription hop is a server call — no connection, no transcript.
+    setStatus('Speech recognition needs a network connection on this platform.');
+  } else {
+    setStatus('Speech error: ' + (event.error || event.message));
+  }
+};
+```
+```ts title="demo.ts"
+recognition.onerror = (event: { error?: string; message?: string }) => {
+  if (event.error === 'not-allowed') {
+    setStatus('Microphone blocked — allow it in the address bar and start again.');
+  } else if (event.error === 'network') {
+    setStatus('Speech recognition needs a network connection on this platform.');
+  } else {
+    setStatus('Speech error: ' + (event.error || event.message));
+  }
+};
+```
+</CodeTabs>
+
+## Translate each final on-device
+
+This half you already wrote in
+[the Translator lesson](./translator-and-language-detector), so lean on it. Take
+the source from `recognition.lang` stripped to its short code, take the target
+from a select, and gate every pair on
+`Translator.availability({ sourceLanguage, targetLanguage })` before you
+`create()`. First touch of a pair downloads its pack — 10 to 50 MB — so wire the
+`monitor` and read `e.loaded` as a 0-to-1 fraction, exactly like before. Then hold
+onto that translator: one instance per pair, reused for every sentence, never
+rebuilt per final. Recreate a translator for each spoken sentence and you turn a
+50 ms translation into a five-second one.
+
+<CodeTabs>
+```js title="demo.js"
+let translator = null;
+let translatorKey = '';
+
+// Reuse one translator per (source, target) pair — don't rebuild it per sentence.
+async function ensureTranslator(sourceLang, targetLang) {
+  const key = sourceLang + '->' + targetLang;
+  if (translator && translatorKey === key) return translator;
+  if (translator) { translator.destroy(); translator = null; }
+
+  const status = await Translator.availability({
+    sourceLanguage: sourceLang,
+    targetLanguage: targetLang,
+  });
+  if (status === 'unavailable') {
+    throw new DOMException('No pack for ' + key, 'NotSupportedError');
+  }
+
+  translator = await Translator.create({
+    sourceLanguage: sourceLang,
+    targetLanguage: targetLang,
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        // e.loaded is a 0..1 fraction — the language pack download
+        setStatus('Downloading ' + key + ' pack… ' + Math.round(e.loaded * 100) + '%');
+      });
+    },
+  });
+  translatorKey = key;
+  return translator;
+}
+
+// A finalized sentence: translate it, append the result.
+async function onFinal(sentence) {
+  const t = await ensureTranslator(sourceLang, targetLang);
+  const output = await t.translate(sentence);
+  appendTranslation(output);
+}
+```
+```ts title="demo.ts"
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+let translator: TranslatorInstance | null = null;
+let translatorKey = '';
+
+async function ensureTranslator(
+  sourceLang: string,
+  targetLang: string,
+): Promise<TranslatorInstance> {
+  const key = sourceLang + '->' + targetLang;
+  if (translator && translatorKey === key) return translator;
+  if (translator) { translator.destroy(); translator = null; }
+
+  const status: Availability = await Translator.availability({
+    sourceLanguage: sourceLang,
+    targetLanguage: targetLang,
+  });
+  if (status === 'unavailable') {
+    throw new DOMException('No pack for ' + key, 'NotSupportedError');
+  }
+
+  translator = await Translator.create({
+    sourceLanguage: sourceLang,
+    targetLanguage: targetLang,
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+        setStatus('Downloading ' + key + ' pack… ' + Math.round(e.loaded * 100) + '%');
+      });
+    },
+  });
+  translatorKey = key;
+  return translator;
+}
+
+async function onFinal(sentence: string): Promise<void> {
+  const t = await ensureTranslator(sourceLang, targetLang);
+  const output: string = await t.translate(sentence);
+  appendTranslation(output);
+}
+```
+</CodeTabs>
+
+## Translate the interim too, and cancel the stale call
+
+Translating on the final result is correct, and it feels a beat slow — the
+translation only shows once the speaker pauses. For a live-caption feel, translate
+the interim string as it grows. But interims fire fast, several a second, and each
+one kicks off a translation you don't want landing after the next one. So two
+rules: debounce, and cancel. Wait about 300 ms after the last interim before you
+translate, and hand `translate()` an `AbortSignal` so a newer interim aborts the
+older in-flight call. Skip the cancel and a slow translation of "how are" arrives
+after "how are you", and the caption stutters backwards.
+
+<CodeTabs>
+```js title="demo.js"
+let interimTimer = null;
+let interimController = null;
+
+function onInterim(text) {
+  clearTimeout(interimTimer);
+  interimTimer = setTimeout(async () => {
+    interimController?.abort();          // cancel the previous in-flight call
+    interimController = new AbortController();
+    try {
+      const t = await ensureTranslator(sourceLang, targetLang);
+      const preview = await t.translate(text, { signal: interimController.signal });
+      showInterimTranslation(preview);   // overwrite — this slot is replaceable
+    } catch (e) {
+      if (e.name !== 'AbortError') console.error(e);
+    }
+  }, 300);
+}
+```
+```ts title="demo.ts"
+let interimTimer: number | null = null;
+let interimController: AbortController | null = null;
+
+function onInterim(text: string): void {
+  if (interimTimer !== null) clearTimeout(interimTimer);
+  interimTimer = window.setTimeout(async () => {
+    interimController?.abort();
+    interimController = new AbortController();
+    try {
+      const t = await ensureTranslator(sourceLang, targetLang);
+      const preview = await t.translate(text, { signal: interimController.signal });
+      showInterimTranslation(preview);
+    } catch (e) {
+      if ((e as DOMException).name !== 'AbortError') console.error(e);
+    }
+  }, 300);
+}
+```
+</CodeTabs>
+
+## Speak the translation back
+
+You've got translated text, and the browser will read it aloud for free.
+`speechSynthesis.speak(new SpeechSynthesisUtterance(text))` is the whole feature.
+Tag the utterance with the target `lang` so it picks a matching voice, and cancel
+any queued speech first so translations don't pile into a backlog when the speaker
+is quick.
+
+<CodeTabs>
+```js title="demo.js"
+function speak(text, lang) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;       // 'es', 'fr' — picks a matching voice
+  speechSynthesis.cancel();    // drop any backlog before speaking
+  speechSynthesis.speak(utterance);
+}
+```
+```ts title="demo.ts"
+function speak(text: string, lang: string): void {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utterance);
+}
+```
+</CodeTabs>
+
+## Handle the mic, then tear it all down
+
+Two APIs open means two things to close. The recognizer holds the microphone and,
+on this platform, a live connection; the translator pins a language pack in
+memory. Stop the recognizer with `.stop()` — idempotent, so calling it twice
+breaks nothing — `destroy()` the translator when the pair changes or the tab goes
+away, and cancel any pending speech. Wire that to both your Stop button and
+`beforeunload`, because a tab closed mid-sentence still holds the mic.
+
+<CodeTabs>
+```js title="demo.js"
+function teardown() {
+  recognition.stop();       // idempotent — safe to call twice
+  translator?.destroy();    // free the language pack
+  translator = null;
+  speechSynthesis.cancel();
+}
+
+window.addEventListener('beforeunload', teardown);
+```
+```ts title="demo.ts"
+function teardown(): void {
+  recognition.stop();
+  translator?.destroy();
+  translator = null;
+  speechSynthesis.cancel();
+}
+
+window.addEventListener('beforeunload', teardown);
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `08-live-voice-translation/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo:
+**[live voice translation](https://windowai.danduh.me/live-translate)** (with the
+[API walkthrough](https://windowai.danduh.me/live-translate/docs)).
+
+Expected: you pick a spoken language and a target, hit Start, allow the mic, and
+as you talk your words show up as interim text that firms into finals — each final
+sentence translated on-device and appended below, optionally read back aloud.
+
+Requires: desktop Chrome with the Translator available plus a microphone; the
+speech step also needs a network connection — see
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of the pain lands in one of a few spots: the recognizer constructor you
+looked up doesn't exist, the mic or the network says no, the language tag is the
+wrong shape, or you left something running.
+
+:::caution SpeechRecognition is undefined
+Symptom: `new SpeechRecognitionCtor()` throws because the constructor came back
+`undefined`. Cause: you read `window.SpeechRecognition` only, but Chrome still
+exposes it as `window.webkitSpeechRecognition`, and non-Chromium browsers
+(Firefox, iOS Safari) don't ship it at all. Fix: feature-detect both —
+`window.SpeechRecognition || window.webkitSpeechRecognition` — and if neither
+exists, degrade to a message plus the hosted demo.
+:::
+
+:::caution The mic is denied, or nothing transcribes offline
+Symptom: `onerror` fires with `not-allowed`, or with `network` and no transcript
+ever arrives. Cause: the user blocked the microphone, or you're offline — and
+Chrome's speech recognition needs a connection because the transcription runs on a
+server, not on-device. Fix: handle `not-allowed` with an "allow the mic" prompt,
+handle `network` by telling the user speech needs a connection, and don't promise
+a fully offline transcript.
+:::
+
+:::caution availability() says unavailable for a language you can clearly speak
+Symptom: `Translator.availability()` returns `unavailable` for, say, French, even
+though the recognizer heard it fine. Cause: you passed the recognizer's BCP-47 tag
+(`fr-FR`) straight into the Translator, which matches on the short code (`fr`).
+Fix: strip the region with `speechLang.split('-')[0]` before you probe or create.
+That one hyphen is the whole bug.
+:::
+
+:::caution The live caption flickers or jumps backwards
+Symptom: in interim mode the translated preview stutters, sometimes flashing an
+earlier, shorter phrase. Cause: interim results fire several times a second and
+you started a translation for each, so a slower earlier call resolves after a
+faster later one. Fix: debounce the interim (about 300 ms) and pass an
+`AbortSignal` so each new interim aborts the previous in-flight `translate()`.
+:::
+
+:::caution The mic stays on, or memory climbs after you navigate
+Symptom: the tab keeps the microphone indicator lit after you're done, or a long
+session gets heavy. Cause: the recognizer was never stopped and the translator was
+never destroyed. Fix: `recognition.stop()` and `translator.destroy()` on your Stop
+button and on `beforeunload`. Two APIs, two shutdowns — every time.
+:::
+
+## Recap
+
+- The bridge between `SpeechRecognition` and `Translator` is one line: strip the BCP-47 tag to its short code with `split('-')[0]`.
+- `SpeechRecognition` needs the `webkit` prefix, `continuous`, `interimResults`, and a user gesture; read results from `event.resultIndex`, splitting `isFinal` finals from interim guesses.
+- Translate finals on-device through the per-pair `availability()` / `create()` / `translate()` loop, reusing one cached translator per pair.
+- For a live feel, translate the interim too — debounced, with an `AbortController` cancelling the stale call.
+- The translation stays on the machine; the transcription does not — be honest about the audio leaving for speech-to-text.
+- `speechSynthesis.speak()` reads the result back; `.stop()` and `destroy()` on teardown close both APIs.
+
+The translating is free now. It's the listening that still costs you.
+
+## Next steps
+
+- [Translator + Language Detector](./translator-and-language-detector) — the on-device translation loop this whole lesson sits on top of.
+- [Writer & Rewriter](./writer-and-rewriter) — the next task API, same `availability()` / `create()` / `destroy()` lifecycle.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable, what's desktop-only, and where the Web Speech API fits.
 
 ---
 
