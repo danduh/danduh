@@ -1,6 +1,6 @@
 ---
 title: "Embeddings (SemanticEmbedder)"
-description: Turn text into on-device vectors with SemanticEmbedder — pick the right task type, compare with cosine similarity, shrink with Matryoshka truncation, and build semantic search with no backend.
+description: "Turn text into on-device vectors with Chrome's SemanticEmbedder: pick a taskType, compare with cosine similarity, and build semantic search with no backend."
 sidebar_position: 11
 sidebar_label: Embeddings
 keywords:
@@ -13,21 +13,435 @@ keywords:
 
 <LessonSchema
   name="Embeddings (SemanticEmbedder)"
-  description="Turn text into on-device vectors — pick the right task type, compare with cosine similarity, shrink with Matryoshka truncation, and build semantic search with no backend."
+  description="Turn text into on-device vectors with Chrome's SemanticEmbedder: pick a taskType, compare with cosine similarity, and build semantic search with no backend."
   path="/courses/chrome-built-in-ai/embeddings"
 />
 
 # Embeddings (SemanticEmbedder)
 
-{/* Status: skeleton — beats only. */}
+Ok. Embeddings are the odd one out in this course: every other API turns text
+into more text, and this one turns text into numbers. `SemanticEmbedder` maps a
+string to a fixed-length vector — that's `embeddinggemma-300m` running fully
+on-device — where meaning becomes a direction you can measure, so "close in
+meaning" turns into "close in space." By the end of this page you'll embed a
+batch of documents, embed a query, and rank them by cosine similarity for
+semantic search that never leaves the tab.
 
-## Availability and waiting for the model
-## Embedding one string and a batch
-## Task types (and the query/document asymmetry)
-## Comparing with cosine similarity
-## Matryoshka dimensions
-## Same embedding space only
-## Building semantic search
+## What you'll build
+
+- Gate `SemanticEmbedder.create()` behind an `availability()` check, and poll for the model instead of wiring a progress monitor — there isn't one yet.
+- Embed one string or a whole batch with `embed()`, and read back `Float32Array` vectors in positional order.
+- Pick the right `taskType` on `embed()`, and use the `retrieval-query` / `retrieval-document` asymmetry for search.
+- Compare two vectors with a short cosine-similarity function, in plain JavaScript.
+- Build a semantic search — embed the docs once, embed the query, rank by cosine — and `destroy()` the session on teardown.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI, plus a caveat the other lessons don't carry:
+this API is bleeding-edge. `SemanticEmbedder` ships in the Early Preview Program
+on Chrome Canary 152, behind the `#semantic-embedder-api` flag. On stable Chrome,
+`availability()` returns `unavailable` — that's expected here, not a bug. If the
+availability states are new to you, start with
+[Setup & the availability lifecycle](./setup-and-availability), and keep
+[the compatibility matrix](./shipping-and-compatibility) handy for what's stable
+where. This page assumes you already know the four availability states.
+:::
+
+## Check availability, then wait for the model
+
+Same loop as every API in this course — ask, create, use, tear down — with one
+wrinkle that trips everyone. `SemanticEmbedder` has no download monitor yet.
+None. The other APIs hand you a `monitor` with a `downloadprogress` event; this
+one doesn't, so you don't wire a progress bar — you poll `availability()` until
+it flips to `available`, then create. Call `create()` while the model is still
+`downloadable` or `downloading` and it throws before you ever hold a session.
+
+<CodeTabs>
+```js title="demo.js"
+if (typeof SemanticEmbedder === 'undefined') {
+  // No built-in embedder here — EPP / Canary only. Degrade gracefully (see lesson 2).
+}
+
+const status = await SemanticEmbedder.availability();
+// "unavailable" | "downloadable" | "downloading" | "available"
+
+// No downloadprogress event yet — poll until the model is ready, THEN create().
+async function waitUntilAvailable() {
+  let state = await SemanticEmbedder.availability();
+  while (state !== 'available') {
+    if (state === 'unavailable') throw new Error('SemanticEmbedder unavailable');
+    await new Promise((r) => setTimeout(r, 1500)); // show a "preparing…" state meanwhile
+    state = await SemanticEmbedder.availability();
+  }
+}
+
+await waitUntilAvailable();
+// highlight-next-line
+const embedder = await SemanticEmbedder.create(); // create() takes NO arguments
+```
+```ts title="demo.ts"
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+const status: Availability = await SemanticEmbedder.availability();
+
+async function waitUntilAvailable(): Promise<void> {
+  let state: Availability = await SemanticEmbedder.availability();
+  while (state !== 'available') {
+    if (state === 'unavailable') throw new Error('SemanticEmbedder unavailable');
+    await new Promise((r) => setTimeout(r, 1500));
+    state = await SemanticEmbedder.availability();
+  }
+}
+
+await waitUntilAvailable();
+// highlight-next-line
+const embedder = await SemanticEmbedder.create();
+```
+</CodeTabs>
+
+No monitor, no percentage — just a spinner and a little patience. The upside:
+`embeddinggemma-300m` is roughly 200 MB, a rounding error next to Gemini Nano's
+multi-gig download. It lands once, then it's instant.
+
+## Embed a string, then a batch
+
+Now the part you came for. `embed()` takes one string or an array of strings and
+hands back an object with an `embeddings` array — each entry is
+`{ values: Float32Array }`, one vector per input, in the same order you passed
+them. For `embeddinggemma-300m` each vector is 768 numbers. When you're indexing
+a collection, pass the whole array in one call: it's cheaper than looping and the
+results come back positionally, so `embeddings[i]` matches `input[i]`.
+
+<CodeTabs>
+```js title="demo.js"
+// One string:
+const single = await embedder.embed('How do I reset my password?');
+const vector = single.embeddings[0].values; // Float32Array, length 768
+
+// A whole batch — results are positional, embeddings[i] matches documents[i]:
+const documents = [
+  'Our refund window is 30 days from purchase.',
+  'Reset your password from the account settings page.',
+  'Two-factor codes come from your authenticator app.',
+];
+const { embeddings } = await embedder.embed(documents);
+console.log(embeddings.length, embeddings[0].values.length); // 3 768
+```
+```ts title="demo.ts"
+interface SemanticEmbedding { values: Float32Array; }
+interface EmbedResult { embeddings: SemanticEmbedding[]; }
+
+const single: EmbedResult = await embedder.embed('How do I reset my password?');
+const vector: Float32Array = single.embeddings[0].values; // length 768
+
+const documents: string[] = [
+  'Our refund window is 30 days from purchase.',
+  'Reset your password from the account settings page.',
+  'Two-factor codes come from your authenticator app.',
+];
+const { embeddings } = await embedder.embed(documents);
+```
+</CodeTabs>
+
+One session, many calls. Create the embedder once and reuse it across every
+`embed()` — don't spin up a fresh one per string.
+
+## Match the task type
+
+Here's the part the docs bury: a plain `embed()` quietly underperforms. The
+options object takes a `taskType`, and it tells the model how the text will be
+used so it can shape the vector for that job. Comparing two sentences for
+likeness is not the same job as searching a corpus, and the model shapes the
+numbers differently for each.
+
+| `taskType` | When to use it |
+|---|---|
+| `semantic-similarity` | Symmetric "are these two alike?" — dedup, paraphrase, "related". |
+| `retrieval-query` | The short thing a user typed into a search box. |
+| `retrieval-document` | The stored items you're searching over — index a corpus with this. |
+| `classification` | Assigning text to preset labels. |
+| `clustering` | Grouping many texts by similarity. |
+
+Retrieval is the one case where the two sides use different task types on
+purpose. Embed your stored documents with `retrieval-document`, embed the user's
+live query with `retrieval-query`, then compare across. That asymmetric pairing
+beats embedding both sides the same way. For a symmetric "are these two things
+alike" — where neither side is privileged — use `semantic-similarity` on both.
+
+<CodeTabs>
+```js title="demo.js"
+// Index time — the stored documents:
+const { embeddings: docVecs } = await embedder.embed(documents, {
+  // highlight-next-line
+  taskType: 'retrieval-document',
+});
+
+// Search time — the user's query:
+const { embeddings: [queryVec] } = await embedder.embed(userQuery, {
+  // highlight-next-line
+  taskType: 'retrieval-query',
+});
+```
+```ts title="demo.ts"
+type TaskType =
+  | 'semantic-similarity'
+  | 'retrieval-query'
+  | 'retrieval-document'
+  | 'classification'
+  | 'clustering';
+
+const docTask: TaskType = 'retrieval-document';
+const queryTask: TaskType = 'retrieval-query';
+
+const { embeddings: docVecs } = await embedder.embed(documents, { taskType: docTask });
+const { embeddings: [queryVec] } = await embedder.embed(userQuery, { taskType: queryTask });
+```
+</CodeTabs>
+
+Omit `taskType` and the text is embedded as-is, no shaping. It works. It just
+leaves relevance on the table for free.
+
+## Compare with cosine similarity
+
+Two vectors, one number. Cosine similarity is the cosine of the angle between
+them: `1` means the same direction (identical meaning), `0` means unrelated, `-1`
+means opposite. It's a dot product over the two magnitudes, and it's eight lines
+of plain JavaScript — no library, no `import`, no vector database.
+
+<CodeTabs>
+```js title="demo.js"
+function cosineSimilarity(a, b) {
+  if (a.length !== b.length) throw new Error('length mismatch');
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom; // in [-1, 1]
+}
+```
+```ts title="demo.ts"
+function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  if (a.length !== b.length) throw new Error('length mismatch');
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+```
+</CodeTabs>
+
+That's the whole comparison engine. Everything below is calling it in a loop and
+sorting the results.
+
+## Build a semantic search
+
+Put the three pieces together and you get search that matches on meaning, not
+keywords. Embed the documents once with `retrieval-document`. Embed the query
+with `retrieval-query`. Score every document against the query with
+`cosineSimilarity`, sort descending, done. Ask "how long do I have to return
+something" and the refund line comes back first — even though it never says the
+word "return."
+
+<CodeTabs>
+```js title="demo.js"
+async function search(query, documents) {
+  await waitUntilAvailable();
+  const embedder = await SemanticEmbedder.create();
+  try {
+    const { embeddings: docVecs } = await embedder.embed(documents, {
+      taskType: 'retrieval-document',
+    });
+    const { embeddings: [queryVec] } = await embedder.embed(query, {
+      taskType: 'retrieval-query',
+    });
+
+    return documents
+      .map((text, i) => ({
+        text,
+        score: cosineSimilarity(queryVec.values, docVecs[i].values),
+      }))
+      .sort((a, b) => b.score - a.score);
+  } finally {
+    embedder.destroy(); // free the model even if embed() throws
+  }
+}
+```
+```ts title="demo.ts"
+interface Ranked { text: string; score: number; }
+
+async function search(query: string, documents: string[]): Promise<Ranked[]> {
+  await waitUntilAvailable();
+  const embedder = await SemanticEmbedder.create();
+  try {
+    const { embeddings: docVecs } = await embedder.embed(documents, {
+      taskType: 'retrieval-document',
+    });
+    const { embeddings: [queryVec] } = await embedder.embed(query, {
+      taskType: 'retrieval-query',
+    });
+
+    return documents
+      .map((text, i) => ({
+        text,
+        score: cosineSimilarity(queryVec.values, docVecs[i].values),
+      }))
+      .sort((a, b) => b.score - a.score);
+  } finally {
+    embedder.destroy();
+  }
+}
+```
+</CodeTabs>
+
+No server took that query. No Pinecone, no Weaviate, no pgvector indexed those
+docs. The index is a `Float32Array`, the query is an angle, and the whole thing
+ran on the user's own GPU with the network graph flat at zero.
+
+## Shrink vectors with Matryoshka truncation
+
+One more trick, because `embeddinggemma-300m` is a Matryoshka model — the
+important information is packed into the leading dimensions. So you can lop a
+768-dim vector down to 512, 256, or 128 by keeping the first N values and
+renormalizing, and it still compares meaningfully. Smaller vectors, less storage,
+faster compares, a modest hit to accuracy. Pick one size and stick to it: only
+ever compare vectors truncated to the same length.
+
+<CodeTabs>
+```js title="demo.js"
+function truncate(values, dims) {
+  const sliced = values.slice(0, dims); // keep leading N dims
+  let norm = 0;
+  for (let i = 0; i < sliced.length; i++) norm += sliced[i] * sliced[i];
+  norm = Math.sqrt(norm);
+  if (norm === 0) return sliced;
+  const out = new Float32Array(sliced.length);
+  for (let i = 0; i < sliced.length; i++) out[i] = sliced[i] / norm; // renormalize
+  return out;
+}
+
+const small = truncate(vector, 256); // supported sizes: 768 | 512 | 256 | 128
+```
+```ts title="demo.ts"
+function truncate(values: Float32Array, dims: number): Float32Array {
+  const sliced = values.slice(0, dims);
+  let norm = 0;
+  for (let i = 0; i < sliced.length; i++) norm += sliced[i] * sliced[i];
+  norm = Math.sqrt(norm);
+  if (norm === 0) return sliced;
+  const out = new Float32Array(sliced.length);
+  for (let i = 0; i < sliced.length; i++) out[i] = sliced[i] / norm;
+  return out;
+}
+
+const small: Float32Array = truncate(vector, 256);
+```
+</CodeTabs>
+
+## Destroy the session
+
+A live embedder holds the model in memory. Lighter than a `LanguageModel`
+session, but leak enough of them and you'll still feel it. So `destroy()` when
+you're done, and wire it to teardown so a closed tab doesn't strand one.
+
+Free it.
+
+<CodeTabs>
+```js title="demo.js"
+embedder.destroy();
+
+// Wire it to teardown so a closed tab doesn't leak the model:
+window.addEventListener('beforeunload', () => embedder?.destroy());
+```
+```ts title="demo.ts"
+embedder.destroy();
+
+window.addEventListener('beforeunload', () => embedder?.destroy());
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `11-embeddings/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome Canary. Or use the hosted demo:
+**[on-device semantic search](https://windowai.danduh.me/embeddings)** (with the
+[API walkthrough](https://windowai.danduh.me/embeddings/docs)).
+
+Expected: you edit a short list of documents, type a query, and the documents
+re-rank by cosine similarity — the closest-in-meaning line jumps to the top,
+score and all, with nothing sent over the network.
+
+Requires: Chrome 152+ Canary with `#semantic-embedder-api` enabled — see
+[Setup & the availability lifecycle](./setup-and-availability). On stable Chrome
+you'll see `unavailable`, and the demo says so instead of breaking.
+:::
+
+## Gotchas & troubleshooting
+
+Most of the pain here is the price of admission: this is an Early Preview API, so
+half the trouble is just getting `availability()` to say anything but
+`unavailable`.
+
+:::caution availability() returns unavailable for almost everyone
+Symptom: the demo reports `unavailable` on your machine. Cause: this is
+EPP/Canary-only — it isn't on stable Chrome. Fix: use Chrome Canary 152+, set
+`#semantic-embedder-api` to Enabled and `#optimization-guide-on-device-model` to
+Enabled BypassPerfRequirement, then relaunch. On stable Chrome, treat
+`unavailable` as the normal path and degrade to a message, not a blank page.
+:::
+
+:::caution create() throws before you hold a session
+Symptom: `create()` rejects with "The device is unable to create a session to run
+the model." Cause: you called `create()` while the model was still `downloadable`
+or `downloading`. There's no `downloadprogress` event to wait on here. Fix: poll
+`availability()` until it returns `available`, then `create()` — which takes no
+arguments.
+:::
+
+:::caution The wrong task type tanks your results
+Symptom: search returns weak or random-looking matches. Cause: you embedded both
+sides the same way, or used `semantic-similarity` for retrieval. Fix:
+`retrieval-document` for the corpus, `retrieval-query` for the query;
+`semantic-similarity` only for symmetric comparisons. Remember `taskType` is an
+option on `embed()`, not on `create()`.
+:::
+
+:::caution QuotaExceededError on a long input
+Symptom: `embed()` rejects with `QuotaExceededError`. Cause: the input is longer
+than the model will take in one shot. Fix: shorten the text, or split it into
+passages and embed each — you were going to store passage-level vectors for
+search anyway.
+:::
+
+:::caution Cosine scores go random after a model update
+Symptom: cached vectors stop matching sensibly. Cause: vectors from two different
+model versions aren't comparable, even at the same length — and neither are two
+different Matryoshka sizes. Fix: persist the model identity next to any cached
+vectors, re-embed the corpus when the model changes, and only compare vectors
+truncated to the same length.
+:::
+
+## Recap
+
+- `SemanticEmbedder.availability()` gates `create()`; there's no progress monitor yet, so poll until `available`, then `create()` with no arguments.
+- `embed()` takes a string or an array and returns `{ embeddings: [{ values: Float32Array }] }` in positional order — 768 dims for `embeddinggemma-300m`.
+- `taskType` lives on `embed()`; use `retrieval-document` for the corpus and `retrieval-query` for the query.
+- Cosine similarity is eight lines of plain JavaScript; rank documents by it for semantic search.
+- Matryoshka truncation shrinks vectors to 512 / 256 / 128 dims — same size on both sides, always.
+- `destroy()` frees the model, and vectors only compare within the same model version.
+
+Everyone else is renting a vector database to measure an angle.
+
+## Next steps
+
+- [The Prompt API (LanguageModel)](./prompt-api) — the on-device model that generates the text you just matched against the right context.
+- [WebMCP: the page as a tool surface](./webmcp) — expose your page's own actions as tools an agent can call.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable, what's still flagged like this one, and what stays desktop-only.
 
 ---
 
