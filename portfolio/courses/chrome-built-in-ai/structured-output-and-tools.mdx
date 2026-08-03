@@ -1,6 +1,6 @@
 ---
 title: "Structured output & tool calling"
-description: Force the model to return JSON with responseFormat, wire real functions with the tools parameter, and learn the responseFormat intent-loop workaround for builds where native tool calling is unreliable.
+description: Force Chrome built-in AI to return JSON with responseFormat, wire real functions as tools, and build the intent-loop fallback that keeps tool calling reliable.
 sidebar_position: 4
 sidebar_label: Structured output & tools
 keywords:
@@ -13,20 +13,398 @@ keywords:
 
 <LessonSchema
   name="Structured output & tool calling"
-  description="Force JSON output with responseFormat, wire real functions with the tools parameter, and learn the responseFormat intent-loop workaround."
+  description="Force JSON output with responseFormat, wire real functions as tools, and build the intent-loop fallback that keeps tool calling reliable."
   path="/courses/chrome-built-in-ai/structured-output-and-tools"
 />
 
 # Structured output & tool calling
 
-{/* Status: skeleton — beats only. */}
+So you asked Gemini Nano for JSON and got back a paragraph, a code fence, and a
+small apology on top. Structured output ends that: you hand the model a JSON
+Schema, Chrome masks every token that would break it, and the reply parses every
+time. This lesson forces valid JSON out of the Prompt API, wires real JavaScript
+functions in as tools, and builds the intent loop that keeps tool calling alive
+when the native path quietly dies.
 
-## Constraining output with responseFormat (JSON Schema)
-## Native tool calling: `create({ tools })`
-## Writing an execute handler
-## The responseFormat intent-loop workaround
-## When to use which
+## What you'll build
+
+- Constrain a session to a JSON Schema with `responseFormat` and parse the result safely.
+- Read the four JSON Schema keywords that matter here: `type`, `properties`, `enum`, `required`.
+- Wire a native tool with `create({ tools })` and an `execute` handler that returns a string.
+- Run an intent loop that dispatches to local functions turn by turn when native tools aren't enabled.
+- Choose between the native path and the loop for a given build.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI, and you've already met the session lifecycle in
+[The Prompt API](./prompt-api). If `LanguageModel` isn't there yet, start with
+[Setup & the availability lifecycle](./setup-and-availability); for which APIs
+are stable on which Chrome, see [the compatibility matrix](./shipping-and-compatibility).
+:::
+
+## Force JSON with responseFormat
+
+Here's the move everyone reaches for first: prompt the model in plain English,
+then parse whatever comes back with a regex you'll be maintaining forever. Don't.
+The reliable move has a name — constrain, don't parse. You pass a JSON Schema as
+`responseFormat` (the spec calls the option `responseConstraint`; Chrome ships it
+today as `responseFormat`, so that's what the code uses), and the runtime masks
+any token that would break the schema while it decodes. One catch: the reply is
+still a string, so you `JSON.parse()` it. And you keep a fence guard, because a
+model that promised you clean JSON will occasionally wrap it in a fenced code
+block anyway.
+
+A schema and a parse. That's the whole trick.
+
+<CodeTabs>
+```js title="demo.js"
+// availability() → create() → use → destroy(): the arc from every lesson.
+if ((await LanguageModel.availability()) !== 'available') return;
+
+// The shape you want back, described as JSON Schema.
+const EXTRACT_SCHEMA = {
+  type: 'object',
+  properties: {
+    sentiment: { type: 'string', enum: ['positive', 'neutral', 'negative'] },
+    topics: { type: 'array', items: { type: 'string' } },
+    summary: { type: 'string' },
+  },
+  required: ['sentiment', 'topics', 'summary'],
+};
+
+const session = await LanguageModel.create({
+  outputLanguage: 'en', // load-bearing: omit it and fenced JSON comes back
+  initialPrompts: [
+    { role: 'system', content: 'You extract structured data from short text. Reply with JSON only.' },
+  ],
+});
+
+// responseFormat forces the reply to match EXTRACT_SCHEMA.
+const raw = await session.prompt(`Extract from this review:\n\n${review}`, {
+  responseFormat: EXTRACT_SCHEMA,
+});
+
+const data = parseJson(raw); // the reply is a STRING — parse it (guard below)
+console.log(data.sentiment, data.topics, data.summary);
+
+session.destroy();
+
+// Some builds still wrap JSON in a fenced block — peel it off, then parse.
+function parseJson(text) {
+  const s = String(text).trim();
+  const fenced = s.match(/^`{3}(?:json)?\s*\n?([\s\S]*?)\n?`{3}$/);
+  return JSON.parse(fenced ? fenced[1].trim() : s);
+}
+```
+```ts title="demo.ts"
+type Extraction = {
+  sentiment: 'positive' | 'neutral' | 'negative';
+  topics: string[];
+  summary: string;
+};
+
+if ((await LanguageModel.availability()) !== 'available') throw new Error('unavailable');
+
+const EXTRACT_SCHEMA = {
+  type: 'object',
+  properties: {
+    sentiment: { type: 'string', enum: ['positive', 'neutral', 'negative'] },
+    topics: { type: 'array', items: { type: 'string' } },
+    summary: { type: 'string' },
+  },
+  required: ['sentiment', 'topics', 'summary'],
+} as const;
+
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [
+    { role: 'system', content: 'You extract structured data from short text. Reply with JSON only.' },
+  ],
+});
+
+const raw: string = await session.prompt(`Extract from this review:\n\n${review}`, {
+  responseFormat: EXTRACT_SCHEMA,
+});
+
+const data = parseJson<Extraction>(raw);
+console.log(data.sentiment, data.topics, data.summary);
+
+session.destroy();
+
+function parseJson<T>(text: string): T {
+  const s = text.trim();
+  const fenced = s.match(/^`{3}(?:json)?\s*\n?([\s\S]*?)\n?`{3}$/);
+  return JSON.parse(fenced ? fenced[1].trim() : s) as T;
+}
+```
+</CodeTabs>
+
+## Read a JSON Schema
+
+You don't need all of JSON Schema. To constrain Nano you need four keywords, and
+here's what each one buys you:
+
+- `type` — the kind of value. `type: 'object'` at the top means the reply is a JSON object; nest `type: 'array'` with `items` for lists, the way `topics` does above.
+- `properties` — the fields and their types. This is the shape the parse will hand you back.
+- `enum` — a closed set of allowed values. `sentiment` can only be `positive`, `neutral`, or `negative`; the model can't invent `mildly-annoyed`.
+- `required` — which fields must appear. Anything not listed is optional and may be dropped.
+
+Add `additionalProperties: false` when you want to forbid stray keys — the intent
+schema two steps down uses exactly that.
+
+## Wire real functions with tools
+
+Structured output is the model talking. Tools are the model doing. A JSON reply
+can't reach your database, hit a pricing endpoint, or read today's weather — a
+tool can, because a tool is just a JavaScript function you hand to `create()`. You
+give it a `name`, a `description` the model reads to decide when to call it, an
+`inputSchema` (JSON Schema again), and an `execute` function. One rule that trips
+everyone: `execute` returns a `Promise<string>`. Not an object. A string.
+
+<CodeTabs>
+```js title="demo.js"
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [{ role: 'system', content: 'You are a weather assistant.' }],
+  tools: [
+    {
+      name: 'getWeather',
+      description: 'Get the current weather for a city.',
+      inputSchema: {
+        type: 'object',
+        properties: { city: { type: 'string', description: 'City name' } },
+        required: ['city'],
+      },
+      // execute MUST return a Promise<string>. Stringify objects yourself.
+      async execute({ city }) {
+        return JSON.stringify({ city, tempC: 21, sky: 'clear' });
+      },
+    },
+  ],
+});
+
+// The model decides whether to call getWeather, runs it, folds the result in.
+const reply = await session.prompt('Do I need a jacket in Tel Aviv?');
+session.destroy();
+```
+```ts title="demo.ts"
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [{ role: 'system', content: 'You are a weather assistant.' }],
+  tools: [
+    {
+      name: 'getWeather',
+      description: 'Get the current weather for a city.',
+      inputSchema: {
+        type: 'object',
+        properties: { city: { type: 'string', description: 'City name' } },
+        required: ['city'],
+      },
+      async execute({ city }: { city: string }): Promise<string> {
+        return JSON.stringify({ city, tempC: 21, sky: 'clear' });
+      },
+    },
+  ],
+});
+
+const reply: string = await session.prompt('Do I need a jacket in Tel Aviv?');
+session.destroy();
+```
+</CodeTabs>
+
+## Run the intent loop when native tools break
+
+Now the part the docs skip. That clean `tools` array is lovely when it works, and
+on recent Canary builds it often doesn't — you wire everything up correctly, call
+`prompt()`, and Chrome answers with `Tool use feature not enabled` or just never
+touches your function. So you stop trusting the feature and lean on the one thing
+that's rock solid: `responseFormat`.
+
+The trick is to make the model emit its intent as JSON and run the tools yourself.
+One schema — `{ toolName, args, reply }`, with `toolName` required. A system prompt
+that lists the tools and says: emit one JSON object per turn, `toolName: "done"`
+when you're finished, no code fences. Then you loop — prompt, parse, run the named
+function in plain JavaScript, feed the result back as the next prompt. Cap it at
+eight turns so a confused model can't spin forever.
+
+<CodeTabs>
+```js title="demo.js"
+// One schema: which tool to call, its args, and the final reply.
+const INTENT_SCHEMA = {
+  type: 'object',
+  required: ['toolName'],
+  additionalProperties: false,
+  properties: {
+    toolName: { type: 'string', description: 'Tool to call next, or "done" to reply.' },
+    args: { type: 'object', description: 'Arguments for the tool.' },
+    reply: { type: 'string', description: 'Final answer — only when toolName is "done".' },
+  },
+};
+
+// Local tools, keyed by name. Each takes args and returns a string.
+const TOOLS = {
+  getWeather: ({ city }) => JSON.stringify({ city, tempC: 21, sky: 'clear' }),
+  calculate: ({ expression }) => JSON.stringify({ result: evalMath(expression) }),
+};
+
+const system = [
+  'You answer by calling tools. Emit ONE JSON object per turn — no code fences.',
+  'Tools: getWeather({ city }), calculate({ expression }).',
+  'Call one tool per turn. When you can answer, emit { "toolName": "done", "reply": "..." }.',
+].join('\n');
+
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  responseFormat: INTENT_SCHEMA,
+  initialPrompts: [{ role: 'system', content: system }],
+});
+
+let next = question; // the user's question
+for (let i = 0; i < 8; i++) {
+  const step = parseJson(await session.prompt(next)); // fence-strip guard from step 1
+  if (!step || step.toolName === 'done') {
+    render(step?.reply ?? 'Done.');
+    break;
+  }
+  const tool = TOOLS[step.toolName];
+  const result = tool ? tool(step.args ?? {}) : `Unknown tool "${step.toolName}".`;
+  next = `Result of ${step.toolName}: ${result}. Call the next tool, or emit {"toolName":"done","reply":"..."}.`;
+}
+
+session.destroy();
+```
+```ts title="demo.ts"
+type Step = { toolName: string; args?: Record<string, unknown>; reply?: string };
+
+const INTENT_SCHEMA = {
+  type: 'object',
+  required: ['toolName'],
+  additionalProperties: false,
+  properties: {
+    toolName: { type: 'string', description: 'Tool to call next, or "done" to reply.' },
+    args: { type: 'object', description: 'Arguments for the tool.' },
+    reply: { type: 'string', description: 'Final answer — only when toolName is "done".' },
+  },
+} as const;
+
+const TOOLS: Record<string, (args: any) => string> = {
+  getWeather: ({ city }) => JSON.stringify({ city, tempC: 21, sky: 'clear' }),
+  calculate: ({ expression }) => JSON.stringify({ result: evalMath(expression) }),
+};
+
+const system = [
+  'You answer by calling tools. Emit ONE JSON object per turn — no code fences.',
+  'Tools: getWeather({ city }), calculate({ expression }).',
+  'Call one tool per turn. When you can answer, emit { "toolName": "done", "reply": "..." }.',
+].join('\n');
+
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  responseFormat: INTENT_SCHEMA,
+  initialPrompts: [{ role: 'system', content: system }],
+});
+
+let next = question;
+for (let i = 0; i < 8; i++) {
+  const step = parseJson<Step>(await session.prompt(next));
+  if (!step || step.toolName === 'done') {
+    render(step?.reply ?? 'Done.');
+    break;
+  }
+  const tool = TOOLS[step.toolName];
+  const result = tool ? tool(step.args ?? {}) : `Unknown tool "${step.toolName}".`;
+  next = `Result of ${step.toolName}: ${result}. Call the next tool, or emit {"toolName":"done","reply":"..."}.`;
+}
+
+session.destroy();
+```
+</CodeTabs>
+
+## Choose native or the loop
+
+So which one do you ship? Depends on who runs your code. If you control the
+browser — a demo, an internal tool, your own Canary — native `tools` is less code
+and reads cleaner. If strangers run it on whatever Chrome they happen to have, the
+loop is the safe bet, because it leans only on `responseFormat`, and structured
+output has been stable since the Prompt API reached the open web. Same model, same
+JSON Schema muscle — the loop just moves the dispatch into a `for` loop you can
+watch.
+
+| You want | Reach for |
+|---|---|
+| Least code, and tool calling works on your build | native `tools` |
+| Shipping to users on mixed Chrome versions | the intent loop |
+| To watch each tool call and step in | the intent loop |
+| A single tool on a clean happy path | native `tools` |
+
+:::tip Try it
+Run it locally: open `04-structured-output-and-tools/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo: **[Tool calling demo](https://windowai.danduh.me/tool-calling/tool-calling-demo)**.
+
+Expected: the Extract panel turns a pasted review into parsed
+`{ sentiment, topics, summary }` fields; then a multi-step question (a little
+percent math plus the weather in London) drives the assistant while a step log
+shows each `getWeather` or `calculate` call, its args, and its result before the
+final reply.
+
+Requires: desktop Chrome with Gemini Nano available — see
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+:::caution Your parse throws on valid-looking JSON
+Symptom: `JSON.parse()` throws `Unexpected token` on output that looks like JSON.
+Cause: the model wrapped it in a fenced code block even with `responseFormat` set —
+it still happens. Fix: keep the fence-stripping `parseJson` from step 1 and never
+call bare `JSON.parse()` on model output.
+:::
+
+:::caution The model ignores your tools
+Symptom: you pass a `tools` array, but `execute` never runs — or `prompt()` throws
+`Tool use feature not enabled`. Cause: native tool calling is unreliable on recent
+Canary builds. Fix: switch to the intent loop; it needs only `responseFormat`,
+which is stable.
+:::
+
+:::caution Tool result comes back as `[object Object]`
+Symptom: the model reasons over garbage. Cause: your `execute` returned an object,
+not a string. Fix: return a `Promise<string>` — `JSON.stringify()` the result
+before you return it.
+:::
+
+:::caution Output degrades: more fences, fewer tool calls
+Symptom: JSON arrives fenced more often and the loop stalls. Cause: you left
+`outputLanguage` off `create()`. Fix: always pass `outputLanguage: 'en'`. It's
+load-bearing here, not decoration.
+:::
+
+:::caution create() hangs, or GPU memory runs out
+Symptom: the first `create()` never resolves, or after a few runs `create()`
+starts rejecting. Cause: the first call blocks on a multi-GB model download, and
+orphaned sessions hold GPU memory. Fix: wire a `monitor` and show progress
+(`e.loaded` is a 0..1 fraction — multiply by 100), and `destroy()` every session
+on teardown.
+:::
+
+## Recap
+
+- `responseFormat` (spec: `responseConstraint`) constrains a session to a JSON Schema; the reply is a string, so `JSON.parse()` it behind a fence guard.
+- The four keywords that matter: `type`, `properties`, `enum`, `required`.
+- Native tools are `{ name, description, inputSchema, execute }`, and `execute` returns a `Promise<string>`.
+- When native tools aren't enabled, the intent loop — `responseFormat` plus a `{ toolName, args, reply }` schema plus a capped prompt/parse/run/feed cycle — does the same job everywhere.
+
+Structured output and the loop are the same instinct pointed two directions: stop
+hoping the model behaves, and take away its room to misbehave. The parser you
+never wrote is the one that never breaks.
+
+## Next steps
+
+- [Multimodal: image input](./multimodal) — feed the same session images, not just text.
+- [The Prompt API (LanguageModel)](./prompt-api) — the session lifecycle these tricks sit on.
+- [Shipping & compatibility](./shipping-and-compatibility) — which APIs are stable on which Chrome before you ship.
+- [Tool Calling API reference](https://windowai.danduh.me/tool-calling/tool-calling-api-documentation) — the hosted docs for the tools option.
 
 ---
 
-Next: [Multimodal: image input](./multimodal).
+Next: [Multimodal: image input](./multimodal)

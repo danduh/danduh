@@ -1,6 +1,6 @@
 ---
 title: "The Prompt API (LanguageModel)"
-description: The core of Chrome's built-in AI — create a LanguageModel session, steer it with system and initial prompts, stream responses, tune temperature and topK, clone sessions, and manage the token budget.
+description: "Build an on-device chat with Chrome's Prompt API: create a LanguageModel session, set a system prompt, stream deltas, tune temperature and topK, manage tokens."
 sidebar_position: 3
 sidebar_label: Prompt API
 keywords:
@@ -13,21 +13,419 @@ keywords:
 
 <LessonSchema
   name="The Prompt API (LanguageModel)"
-  description="Create a LanguageModel session, steer it with system and initial prompts, stream responses, tune parameters, clone sessions, and manage the token budget."
+  description="Create a LanguageModel session, set a system prompt, stream deltas, tune temperature and topK, clone sessions, and manage the token budget — on-device."
   path="/courses/chrome-built-in-ai/prompt-api"
 />
 
 # The Prompt API (LanguageModel)
 
-{/* Status: skeleton — beats only. */}
+Ok. The Prompt API — the bare `LanguageModel` global — is the one you actually
+came for: the raw chat surface onto Gemini Nano, running on your own GPU with no
+OpenAI key, no Anthropic invoice, and no network request at all. Conversational
+state, a system prompt, streaming, tuning, cloning, a token budget. By the end
+of this page you'll have a working on-device chat and know every knob worth
+turning.
 
-## Creating a session
-## System prompts and initial (N-shot) prompts
-## prompt() vs promptStreaming()
-## Session options: temperature and topK
-## Cloning sessions
-## Tokens, quota, and context overflow
-## Destroying a session
+## What you'll build
+
+- Create a `LanguageModel` session behind an `availability()` gate, always passing `outputLanguage: 'en'`.
+- Steer output with a system prompt and N-shot `initialPrompts`.
+- Stream replies with `promptStreaming()` and append the deltas (never replace).
+- Tune `temperature` and `topK` from `params()`, and fork a session with `clone()`.
+- Track `inputUsage` against `inputQuota`, survive context overflow, and `destroy()` on teardown.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on. If `LanguageModel` isn't there yet,
+work through [Setup & the availability lifecycle](./setup-and-availability)
+first, and check [the compatibility matrix](./shipping-and-compatibility) for
+what's stable where. This page assumes you know the availability states — it
+won't re-teach them.
+:::
+
+## Create a session
+
+The loop is always the same: ask whether the model is there, create a session,
+use it, tear it down. Feature-detect the global, check `availability()`, then
+`create()` — and pass `outputLanguage: 'en'` every single time. Skip it and
+Chrome still answers, just worse: JSON wrapped in code fences, invented IDs,
+fewer tool calls. It's load-bearing.
+
+<CodeTabs>
+```js title="demo.js"
+if (typeof LanguageModel === 'undefined') {
+  // No built-in AI on this browser — degrade gracefully (see lesson 2).
+}
+
+const status = await LanguageModel.availability();
+// "unavailable" | "downloadable" | "downloading" | "available"
+
+if (status !== 'unavailable') {
+  const session = await LanguageModel.create({
+    // highlight-next-line
+    outputLanguage: 'en', // always. this is load-bearing.
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        // e.loaded is a 0..1 fraction — there is no e.total in current builds
+        console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
+
+  const reply = await session.prompt('Say hi in one word.');
+  console.log(reply);
+  session.destroy();
+}
+```
+```ts title="demo.ts"
+type Availability =
+  | 'unavailable'
+  | 'downloadable'
+  | 'downloading'
+  | 'available';
+
+const status: Availability = await LanguageModel.availability();
+
+if (status !== 'unavailable') {
+  const session: LanguageModel = await LanguageModel.create({
+    // highlight-next-line
+    outputLanguage: 'en', // always. this is load-bearing.
+    monitor(m: AICreateMonitor) {
+      m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+        console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
+
+  const reply: string = await session.prompt('Say hi in one word.');
+  console.log(reply);
+  session.destroy();
+}
+```
+</CodeTabs>
+
+First `create()` on a fresh machine blocks on a multi-GB download. That's why
+the `monitor` is wired from line one, not bolted on later.
+
+## Set a system prompt and initial (N-shot) prompts
+
+The system prompt is how you hand the model a job. It goes into `initialPrompts`
+as a `{role:'system'}` message — and it has to be first. Index 0, exactly once.
+Put it anywhere else, or pass two, and `create()` throws a `TypeError` before you
+ever hold a session. There is no top-level `systemPrompt` string; that shape is
+legacy, gone.
+
+After the system message you can prime the model with example turns — user says
+this, assistant answers that — so it copies the pattern instead of guessing at
+it. That's N-shot prompting, and it's the cheapest steering you'll ever do.
+
+<CodeTabs>
+```js title="demo.js"
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [
+    // highlight-next-line
+    { role: 'system', content: 'You are a concise, friendly assistant.' },
+    { role: 'user', content: 'ping' },
+    { role: 'assistant', content: 'pong' },
+  ],
+});
+
+// The system message steers every turn and survives context overflow.
+const reply = await session.prompt('marco');
+```
+```ts title="demo.ts"
+const session: LanguageModel = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [
+    // highlight-next-line
+    { role: 'system', content: 'You are a concise, friendly assistant.' },
+    { role: 'user', content: 'ping' },
+    { role: 'assistant', content: 'pong' },
+  ],
+});
+
+const reply: string = await session.prompt('marco');
+```
+</CodeTabs>
+
+## Choose prompt() or promptStreaming()
+
+Two ways to get text out. `prompt()` hands you the whole reply once it's done —
+one await, one string. `promptStreaming()` hands you a `ReadableStream` and you
+loop over it with `for await`. Here's the part people get wrong: the chunks are
+deltas, not snapshots. Each chunk is the next slice of text, so you accumulate
+them. Render the raw chunk on its own and the previous words vanish.
+
+Append. Don't replace.
+
+<CodeTabs>
+```js title="demo.js"
+// Whole reply at once:
+const reply = await session.prompt('Write a haiku about TypeScript.');
+
+// Or stream incremental deltas and append them:
+let text = '';
+const stream = session.promptStreaming('Write a haiku about TypeScript.');
+for await (const chunk of stream) {
+  // highlight-next-line
+  text += chunk; // deltas — append, never replace
+  render(text);
+}
+```
+```ts title="demo.ts"
+const reply: string = await session.prompt('Write a haiku about TypeScript.');
+
+let text = '';
+const stream: ReadableStream<string> = session.promptStreaming(
+  'Write a haiku about TypeScript.',
+);
+for await (const chunk of stream) {
+  // highlight-next-line
+  text += chunk; // deltas — append, never replace
+  render(text);
+}
+```
+</CodeTabs>
+
+## Tune temperature and topK from params()
+
+Two decoding knobs. `temperature` is how much the model gambles — low is
+deterministic and repetitive, high is creative and occasionally unhinged.
+`topK` caps how many candidate tokens it samples from each step. Don't guess the
+ranges, ask for them: `LanguageModel.params()` returns the defaults and the
+ceilings. But feature-detect it first — some builds ship the model without
+shipping `params()`, and calling it blind throws.
+
+<CodeTabs>
+```js title="demo.js"
+let temperature;
+let topK;
+
+// highlight-next-line
+if (typeof LanguageModel.params === 'function') {
+  const params = await LanguageModel.params();
+  // { defaultTopK, maxTopK, defaultTemperature, maxTemperature }
+  temperature = params.defaultTemperature;
+  topK = params.defaultTopK;
+}
+
+const session = await LanguageModel.create({
+  outputLanguage: 'en',
+  temperature, // undefined falls back to the model default
+  topK,
+  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
+});
+```
+```ts title="demo.ts"
+let temperature: number | undefined;
+let topK: number | undefined;
+
+// highlight-next-line
+if (typeof LanguageModel.params === 'function') {
+  const params: LanguageModelParams = await LanguageModel.params();
+  temperature = params.defaultTemperature;
+  topK = params.defaultTopK;
+}
+
+const session: LanguageModel = await LanguageModel.create({
+  outputLanguage: 'en',
+  temperature,
+  topK,
+  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
+});
+```
+</CodeTabs>
+
+These are locked in at `create()`. Want different settings mid-chat? New session.
+
+## Fork a conversation with clone()
+
+`clone()` branches a session. The copy inherits the system prompt, the initial
+prompts, and every turn up to the moment you cloned; after that the two diverge
+and never speak again. It's cheaper than rebuilding a primed session from
+scratch, and it's the honest way to run "give me two answers to the same
+question" or to keep an undo snapshot before a risky turn.
+
+<CodeTabs>
+```js title="demo.js"
+const base = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
+});
+
+// highlight-next-line
+const branch = await base.clone(); // shares history up to now, then diverges
+
+const [a, b] = await Promise.all([
+  base.prompt('Pitch me a startup name.'),
+  branch.prompt('Pitch me a startup name.'),
+]);
+
+base.destroy();
+branch.destroy();
+```
+```ts title="demo.ts"
+const base: LanguageModel = await LanguageModel.create({
+  outputLanguage: 'en',
+  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
+});
+
+// highlight-next-line
+const branch: LanguageModel = await base.clone();
+
+const [a, b]: [string, string] = await Promise.all([
+  base.prompt('Pitch me a startup name.'),
+  branch.prompt('Pitch me a startup name.'),
+]);
+
+base.destroy();
+branch.destroy();
+```
+</CodeTabs>
+
+## Track tokens, quota, and context overflow
+
+A session has a budget — `inputQuota`, usually around 4096 input tokens — and
+`inputUsage` climbs as the conversation grows. Watch the gap. When a new prompt
+would blow past the quota, the session quietly evicts your oldest turns to make
+room, one user/assistant pair at a time. The system prompt is never evicted;
+that's the whole reason it's special. And if even that can't free enough room,
+you get a `QuotaExceededError` and nothing is dropped.
+
+<CodeTabs>
+```js title="demo.js"
+console.log(`${session.inputUsage} / ${session.inputQuota} input tokens`);
+
+try {
+  const reply = await session.prompt(veryLongText);
+} catch (e) {
+  // highlight-next-line
+  if (e.name === 'QuotaExceededError') {
+    // Couldn't evict enough to fit — start fresh (or summarize the history first).
+    session.destroy();
+    session = await LanguageModel.create({ outputLanguage: 'en', initialPrompts });
+  }
+}
+```
+```ts title="demo.ts"
+console.log(`${session.inputUsage} / ${session.inputQuota} input tokens`);
+
+try {
+  const reply: string = await session.prompt(veryLongText);
+} catch (e) {
+  // highlight-next-line
+  if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+    session.destroy();
+    session = await LanguageModel.create({ outputLanguage: 'en', initialPrompts });
+  }
+}
+```
+</CodeTabs>
+
+No `maxTokens`, no `tokensSoFar`, no `countPromptTokens()` — those names are from
+an older draft. `inputUsage` and `inputQuota` are the whole vocabulary now.
+
+## Destroy the session
+
+A session pins real GPU memory, and Nano isn't small. Leave one hanging and you
+starve every other feature on the page. So call `destroy()` when you're done and
+wire it to teardown, so a closed tab doesn't leak. One catch: a destroyed
+session is gone. Touch it again and you get an `InvalidStateError`.
+
+Recreate. Don't resurrect.
+
+<CodeTabs>
+```js title="demo.js"
+session.destroy();
+
+// Wire it to teardown so a closed tab doesn't leak GPU memory:
+window.addEventListener('beforeunload', () => session?.destroy());
+
+// Prompting after destroy() throws InvalidStateError — create a new session instead.
+```
+```ts title="demo.ts"
+session.destroy();
+
+window.addEventListener('beforeunload', () => session?.destroy());
+
+// Prompting after destroy() throws InvalidStateError — create a new session instead.
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `03-prompt-api/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo:
+**[on-device chat](https://windowai.danduh.me/chat/chat-demo)** (with the
+[API walkthrough](https://windowai.danduh.me/chat/chat-api-documentation)).
+
+Expected: you type a prompt, the reply streams in a few words at a time, and a
+token readout updates to something like `48 / 4096` after each turn.
+
+Requires: desktop Chrome with Gemini Nano available — see
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of these are the same three mistakes wearing different hats: you didn't
+wait for the download, you didn't pass `outputLanguage`, or you treated a
+streaming delta like a snapshot.
+
+:::caution create() never resolves
+Symptom: the first `create()` hangs forever with no error. Cause: the multi-GB
+model is downloading and you didn't wire a `monitor`, so there's nothing visible
+to wait on. Fix: always pass `monitor(m)` and read `e.loaded` (a 0..1 fraction)
+for progress. `create()` resolves when the download finishes.
+:::
+
+:::caution Output degrades — fenced JSON, hallucinated detail
+Symptom: replies come wrapped in code fences or full of invented specifics.
+Cause: you omitted `outputLanguage` on `create()`. Fix: always pass
+`outputLanguage: 'en'`. On current Chrome it's load-bearing, not a nicety.
+:::
+
+:::caution The streamed reply shows only the last few characters
+Symptom: the output flickers and ends on a fragment. Cause: you're replacing the
+output with each chunk, but the chunks are deltas, not the full text so far.
+Fix: append — `text += chunk` — then render the accumulated `text`.
+:::
+
+:::caution create() throws a TypeError
+Symptom: a `TypeError` before you ever get a session. Cause: your
+`{role:'system'}` message isn't at index 0 of `initialPrompts`, or there's more
+than one. Fix: exactly one system message, first in the array. No top-level
+`systemPrompt`.
+:::
+
+:::caution QuotaExceededError on a long chat
+Symptom: a prompt rejects with `QuotaExceededError`. Cause: even after evicting
+the oldest turns, the history plus the new prompt won't fit `inputQuota`. Fix:
+destroy and start a fresh session, or run the history through the Summarizer and
+prime a new session with the summary.
+:::
+
+:::caution InvalidStateError when prompting
+Symptom: `InvalidStateError` on `prompt()`. Cause: you already called
+`destroy()` on that session. Fix: sessions don't come back — create a new one.
+:::
+
+## Recap
+
+- `availability()` gates `create()`; every `create()` gets `outputLanguage: 'en'`.
+- The system prompt lives at `initialPrompts[0]`, exactly once; N-shot examples follow as user/assistant pairs.
+- `promptStreaming()` yields deltas — accumulate them, don't replace.
+- `params()` gives you the `temperature`/`topK` ranges; feature-detect it before you call it.
+- `clone()` forks a primed session; `inputUsage`/`inputQuota` track the budget; overflow evicts oldest turns or throws.
+- `destroy()` frees GPU memory, and a destroyed session is done for good.
+
+Everyone else is still renting tokens.
+
+## Next steps
+
+- [Structured output & tool calling](./structured-output-and-tools) — force the model to return JSON you can parse, and wire it to real functions.
+- [Setup & the availability lifecycle](./setup-and-availability) — the availability states and the download flow in depth.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable, what's flagged, and what stays desktop-only.
 
 ---
 

@@ -1,33 +1,395 @@
 ---
 title: "Multimodal: image input"
-description: Upgrade a LanguageModel session to accept images with expectedInputs, then feed it drag-drop, clipboard paste, single-frame webcam captures, and a continuous live feed — all on-device.
+description: "Add image input to a Chrome LanguageModel session: opt in with expectedInputs, pass a Blob as a content part, and stream the on-device answer to any picture."
 sidebar_position: 5
 sidebar_label: Multimodal
 keywords:
   - multimodal
   - image input
   - LanguageModel
-  - webcam AI
+  - Gemini Nano
   - on-device vision
 ---
 
 <LessonSchema
   name="Multimodal: image input"
-  description="Upgrade a LanguageModel session to accept images, then feed it drag-drop, clipboard paste, single-frame webcam captures, and a continuous live feed."
+  description="Add image input to a Chrome LanguageModel session: opt in with expectedInputs, pass a Blob as a content part, and stream the on-device answer to any picture."
   path="/courses/chrome-built-in-ai/multimodal"
 />
 
 # Multimodal: image input
 
-{/* Status: skeleton — beats only. */}
+So here's the upgrade: multimodal image input is one option at `create()`, not a new API. You declare that pictures are coming, hand `prompt()` a `Blob`, and the same Gemini Nano that read your text now tells you what it sees — every pixel staying on the machine. Up to now it was working blind; now you give it eyes.
 
-## Unlocking images: expectedInputs
-## Prompts as content-part arrays
-## Drag-drop and clipboard paste
-## Single-frame webcam capture
-## Continuous live mode: downsample, gate, reuse
-## Camera permission errors
+## What you'll build
+
+- Probe multimodal availability without letting older builds throw in your face.
+- Opt a session into image input with `expectedInputs` so the runtime loads the vision tower.
+- Turn a dropped, pasted, or picked file into a `Blob` and preview it.
+- Downsample to the 512px vision tile, then ask with role-wrapped content parts.
+- Stream the answer back and `destroy()` the session on teardown.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI enabled, and you've already met the [Prompt API](./prompt-api) — this is that same `LanguageModel`, plus eyes. New to any of this? Start with [Setup & the availability lifecycle](./setup-and-availability) and skim [the compatibility matrix](./shipping-and-compatibility).
+:::
+
+## Probe for image support
+
+Same `availability()` call as every other API, with one option bolted on: you ask specifically about images. Here's the catch — builds that predate multimodal don't recognise the option and throw instead of politely returning a string. So you wrap it and treat a throw as a no.
+
+<CodeTabs>
+```js title="demo.js"
+async function getMultimodalAvailability() {
+  if (typeof LanguageModel === 'undefined') return 'unavailable';
+  try {
+    // highlight-next-line
+    return await LanguageModel.availability({ expectedInputs: [{ type: 'image' }] });
+  } catch {
+    return 'unavailable'; // older builds throw on the option — treat it as a no
+  }
+}
+```
+```ts title="demo.ts"
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+async function getMultimodalAvailability(): Promise<Availability> {
+  if (typeof LanguageModel === 'undefined') return 'unavailable';
+  try {
+    return await LanguageModel.availability({ expectedInputs: [{ type: 'image' }] });
+  } catch {
+    return 'unavailable';
+  }
+}
+```
+</CodeTabs>
+
+## Opt into image input at create()
+
+One option turns a text session into a vision session. `expectedInputs` declares that both text and images are coming, and that declaration is what makes the runtime load the vision tower up front. Skip it and the session rejects every image you send it. Keep `outputLanguage: 'en'` on there like everywhere else, and wire a `monitor` — the first multimodal `create()` may pull the model down, and that download blocks the promise until it finishes.
+
+<CodeTabs>
+```js title="demo.js"
+let sessionPromise = null;
+
+function getSession() {
+  if (sessionPromise) return sessionPromise;
+  sessionPromise = LanguageModel.create({
+    // highlight-start
+    expectedInputs: [{ type: 'text', languages: ['en'] }, { type: 'image' }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    // highlight-end
+    outputLanguage: 'en',
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        console.log(`Downloading model ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  }).catch((err) => {
+    sessionPromise = null; // let the next call retry a failed download
+    throw err;
+  });
+  return sessionPromise;
+}
+```
+```ts title="demo.ts"
+let sessionPromise: Promise<LanguageModel> | null = null;
+
+function getSession(): Promise<LanguageModel> {
+  if (sessionPromise) return sessionPromise;
+  sessionPromise = LanguageModel.create({
+    expectedInputs: [{ type: 'text', languages: ['en'] }, { type: 'image' }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    outputLanguage: 'en',
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        console.log(`Downloading model ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  }).catch((err: unknown) => {
+    sessionPromise = null;
+    throw err;
+  });
+  return sessionPromise;
+}
+```
+</CodeTabs>
+
+## Get a Blob from the user
+
+The model takes a handful of image types — an `ImageBitmap`, an `ImageData`, an `<img>`, a `<canvas>` — but a `Blob` is the one you'll reach for, because it's what the browser already hands you. A file picker. A drag-and-drop. A clipboard paste. All three normalise to the same `Blob`, so one `setImage()` covers every path.
+
+<CodeTabs>
+```js title="demo.js"
+const fileInput = document.getElementById('file');
+const drop = document.getElementById('drop');
+let currentImage = null;
+
+function setImage(blob) {
+  if (!blob || !blob.type.startsWith('image/')) return;
+  currentImage = blob; // a Blob — hand it straight to prompt() later
+  preview.src = URL.createObjectURL(blob);
+}
+
+// 1. File picker
+fileInput.addEventListener('change', () => setImage(fileInput.files[0]));
+
+// 2. Drag and drop
+drop.addEventListener('dragover', (e) => e.preventDefault());
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  setImage(e.dataTransfer.files[0]);
+});
+
+// 3. Clipboard paste
+document.addEventListener('paste', (e) => {
+  for (const item of e.clipboardData.items) {
+    if (item.type.startsWith('image/')) { setImage(item.getAsFile()); return; }
+  }
+});
+```
+```ts title="demo.ts"
+const fileInput = document.getElementById('file') as HTMLInputElement;
+const drop = document.getElementById('drop') as HTMLElement;
+let currentImage: Blob | null = null;
+
+function setImage(blob: Blob | null | undefined): void {
+  if (!blob || !blob.type.startsWith('image/')) return;
+  currentImage = blob;
+  (preview as HTMLImageElement).src = URL.createObjectURL(blob);
+}
+
+fileInput.addEventListener('change', () => setImage(fileInput.files?.[0]));
+
+drop.addEventListener('dragover', (e: DragEvent) => e.preventDefault());
+drop.addEventListener('drop', (e: DragEvent) => {
+  e.preventDefault();
+  setImage(e.dataTransfer?.files[0]);
+});
+
+document.addEventListener('paste', (e: ClipboardEvent) => {
+  for (const item of e.clipboardData?.items ?? []) {
+    if (item.type.startsWith('image/')) { setImage(item.getAsFile()); return; }
+  }
+});
+```
+</CodeTabs>
+
+## Downsample to the vision tile
+
+Behind the glass the vision tower squashes whatever you send down to roughly a 512-pixel tile. So a 4032×3024 phone photo buys you nothing but a slower prompt and more memory — the answer comes back identical to the 512px version. Shrink it yourself first. Draw the image into a canvas at 512 on the long side, then reach for `canvas.toBlob`, which hands you `null` on failure — so check for it.
+
+<CodeTabs>
+```js title="demo.js"
+async function downsample(blob, max = 512) {
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) => {
+    // highlight-next-line
+    canvas.toBlob((out) => (out ? resolve(out) : reject(new Error('toBlob returned null'))), 'image/jpeg', 0.9);
+  });
+}
+```
+```ts title="demo.ts"
+async function downsample(blob: Blob, max = 512): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (out) => (out ? resolve(out) : reject(new Error('toBlob returned null'))),
+      'image/jpeg',
+      0.9,
+    );
+  });
+}
+```
+</CodeTabs>
+
+## Ask about the image
+
+Here's where the shape changes. A multimodal `prompt()` doesn't take a string — it takes an array of role-wrapped content parts: one `user` message whose `content` is a list of `{type, value}` pieces. The part key is `value`. Not `image`, not `data`, not `src`. Get that key wrong and the call throws, so it's worth staring at once.
+
+<CodeTabs>
+```js title="demo.js"
+async function ask(question) {
+  const session = await getSession();
+  const image = await downsample(currentImage, 512);
+  const reply = await session.prompt([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', value: question },
+        // highlight-next-line
+        { type: 'image', value: image }, // key is `value` — not image/data/src
+      ],
+    },
+  ]);
+  return reply; // the full string reply
+}
+```
+```ts title="demo.ts"
+interface ContentPart {
+  type: 'text' | 'image';
+  value: string | Blob | ImageBitmap;
+}
+interface UserMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: ContentPart[];
+}
+// The shipped d.ts only types the string overload, so cast to reach the array one.
+interface MultimodalSession {
+  prompt(input: UserMessage[]): Promise<string>;
+  promptStreaming(input: UserMessage[]): ReadableStream<string>;
+  destroy(): void;
+}
+
+async function ask(question: string): Promise<string> {
+  const session = (await getSession()) as unknown as MultimodalSession;
+  const image = await downsample(currentImage!, 512);
+  return session.prompt([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', value: question },
+        { type: 'image', value: image },
+      ],
+    },
+  ]);
+}
+```
+</CodeTabs>
+
+## Stream the answer instead
+
+For a one-word label, `prompt()` is fine. For a description, you don't want the user staring at a spinner while the whole paragraph assembles offscreen — so swap in `promptStreaming()` and paint the text as it lands. One thing that bites everyone exactly once: the chunks are deltas, the new slice each time, not the whole answer so far. Append, never replace.
+
+<CodeTabs>
+```js title="demo.js"
+async function askStreaming(question) {
+  const session = await getSession();
+  const image = await downsample(currentImage, 512);
+  const stream = session.promptStreaming([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', value: question },
+        { type: 'image', value: image },
+      ],
+    },
+  ]);
+  output.textContent = '';
+  for await (const chunk of stream) {
+    // highlight-next-line
+    output.textContent += chunk; // chunks are deltas — append, don't replace
+  }
+}
+```
+```ts title="demo.ts"
+async function askStreaming(question: string): Promise<void> {
+  const session = (await getSession()) as unknown as MultimodalSession;
+  const image = await downsample(currentImage!, 512);
+  const stream: ReadableStream<string> = session.promptStreaming([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', value: question },
+        { type: 'image', value: image },
+      ],
+    },
+  ]);
+  output.textContent = '';
+  for await (const chunk of stream) {
+    output.textContent += chunk;
+  }
+}
+```
+</CodeTabs>
+
+## Destroy the session on teardown
+
+The vision tower is heavier than a plain text session — it holds GPU memory the entire time it's alive. So you keep one session, reuse it for every question, and hand it back when the page goes away. Leave sessions orphaned and you starve the GPU until the tab reloads.
+
+<CodeTabs>
+```js title="demo.js"
+window.addEventListener('beforeunload', () => {
+  if (sessionPromise) sessionPromise.then((s) => s.destroy()).catch(() => {});
+});
+```
+```ts title="demo.ts"
+window.addEventListener('beforeunload', () => {
+  sessionPromise?.then((s) => s.destroy()).catch(() => {});
+});
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `05-multimodal/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo: **[Multimodal on windowai.danduh.me](https://windowai.danduh.me/multimodal)**.
+
+Expected: you drop, paste, or pick an image, type a question, and the answer streams in underneath — with nothing leaving the machine (open DevTools → Network and watch it stay silent). The hosted [API docs](https://windowai.danduh.me/multimodal/docs) walk the same calls.
+
+Requires: desktop Chrome with Gemini Nano and image input available — see [Setup](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+:::caution The session rejects your image
+Cause: you called `create()` without `expectedInputs`, so the runtime never loaded the vision tower and the session is text-only.
+
+Fix: declare `expectedInputs: [{type:'text', languages:['en']}, {type:'image'}]` at create time. It has to be there up front — you can't teach a text session to see after it's born.
+:::
+
+:::caution availability() throws instead of answering
+Cause: the build predates multimodal and doesn't recognise the `expectedInputs` option, so it throws rather than returning a string.
+
+Fix: wrap the probe in try/catch and treat a throw as `"unavailable"`. Never assume the option exists.
+:::
+
+:::caution The first prompt hangs for a long time
+Cause: the first multimodal `create()` triggers the Gemini Nano download, and `create()` doesn't resolve until that finishes — several GB on a cold machine.
+
+Fix: pass a `monitor` and show progress. `e.loaded` is a 0..1 fraction, so multiply by 100 for a percentage — there's no `e.total` in current builds.
+:::
+
+:::caution The answer is confidently wrong
+Cause: Nano is a generalist. It's weak on dense or handwritten text, on counting past ~10, and on faces — and it won't warn you that it's guessing.
+
+Fix: keep the ask to "roughly what's here". For exact counts, precise coordinates, handwriting, or recognising a specific person, reach for a specialised model — this isn't the tool.
+:::
+
+:::caution The tab gets sluggish after a few images
+Cause: orphaned sessions keep the vision tower resident in GPU memory. Spin up a fresh session per prompt and you leak one every time.
+
+Fix: create one session, reuse it, and `destroy()` it on teardown. One in, one out.
+:::
+
+## Recap
+
+- `availability({expectedInputs:[{type:'image'}]})`, wrapped in try/catch, tells you whether images are on the table.
+- `expectedInputs` at `create()` loads the vision tower; without it the session stays blind.
+- A `Blob` from a picker, a drop, or a paste is all the same to `prompt()`.
+- Downsample to ~512px — same answer, a fraction of the cost.
+- Content parts are role-wrapped and keyed by `value`; stream the deltas and append them.
+- Keep one session, `destroy()` it on the way out.
+
+Cloud vision rents you a pair of eyes by the photo. This one forgets the picture the second you close the tab.
+
+## Next steps
+
+- [Structured output & tool calling](./structured-output-and-tools) — pair image input with a JSON schema to turn a photo into a machine-readable list.
+- [The Summarizer API](./summarizer) — the next task API, for condensing text instead of reading pixels.
+- [Shipping & compatibility](./shipping-and-compatibility) — the matrix of what's stable where, before you put this in front of users.
 
 ---
 
-Next: [The Summarizer](./summarizer).
+Next: [The Summarizer API](./summarizer)
