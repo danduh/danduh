@@ -1,8 +1,8 @@
 ---
 title: "Translator + Language Detector"
-description: Two on-device APIs that meet in the middle — detect a language with confidence scores, translate between pairs, and compose them into a detect-then-translate flow with cached per-pair sessions.
+description: "Detect a language with confidence scores, then translate between BCP-47 pairs on-device with Chrome's Translator and Language Detector — no server, no key."
 sidebar_position: 7
-sidebar_label: Translator & Detector
+sidebar_label: Translator + Detector
 keywords:
   - Translator API
   - Language Detector API
@@ -13,20 +13,405 @@ keywords:
 
 <LessonSchema
   name="Translator + Language Detector"
-  description="Detect a language with confidence scores, translate between pairs, and compose them into a detect-then-translate flow with cached per-pair sessions."
+  description="Detect a language with confidence scores, then translate between BCP-47 pairs on-device with Chrome's Translator and Language Detector — no server, no key."
   path="/courses/chrome-built-in-ai/translator-and-language-detector"
 />
 
 # Translator + Language Detector
 
-{/* Status: skeleton — beats only. */}
+So you've got a paragraph in a language you didn't pick, and you want it in one
+you did — no server, no API key, no `fetch` to an endpoint that keeps a copy of
+every sentence. Chrome ships two on-device globals for exactly that job:
+`LanguageDetector` tells you what language the text is in and how sure it is, and
+`Translator` turns a source-target pair into translated text. By the end of this
+page you'll detect a language, read the confidence, and chain the top guess
+straight into a translation — all on the GPU that's already in the machine.
 
-## Detecting a language (and reading confidence)
-## Translating between a language pair
-## Streaming translations
-## Combined detect-then-translate
-## Language packs and caching translators
-## Quota and error handling
+## What you'll build
+
+- Detect a language with `LanguageDetector`, read the confidence scores, and handle the `und` (unknown) case.
+- Probe `Translator.availability({ sourceLanguage, targetLanguage })` per pair — packs download per pair, so availability is per pair too.
+- Create a translator behind that gate and show first-run pack download with a `monitor`.
+- Stream longer output with `translateStreaming()` and append the deltas, or take the whole string from `translate()`.
+- Chain detect into translate: feed the top detected language in as the source, guard low-confidence guesses, then `destroy()` both.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on. New to this? Start with
+[Setup & the availability lifecycle](./setup-and-availability), and check
+[the compatibility matrix](./shipping-and-compatibility) for where these two
+ship. This page assumes you already know the four availability states — it won't
+re-teach them.
+:::
+
+## Detect the language first
+
+Before you can translate a thing, you need to know what you're translating from.
+`LanguageDetector` takes a string and hands back a ranked list: each entry a
+language code and a confidence between 0 and 1, sorted best-guess first. The loop
+is the one you already know — feature-detect, check `availability()`, `create()`,
+use it, `destroy()`.
+
+One quirk to bake in from line one: the list almost always ends with `und`.
+That's not a language. It's the model's own estimate that the text isn't in any
+language it knows — short strings, emoji, a lone URL, that's where `und` climbs
+the ranking.
+
+<CodeTabs>
+```js title="demo.js"
+if (typeof LanguageDetector === 'undefined') {
+  // No built-in detector on this browser — degrade gracefully (see lesson 2).
+}
+
+const status = await LanguageDetector.availability();
+// "unavailable" | "downloadable" | "downloading" | "available"
+
+const detector = await LanguageDetector.create({
+  monitor(m) {
+    m.addEventListener('downloadprogress', (e) => {
+      // e.loaded is a 0..1 fraction — there is no e.total in current builds
+      console.log(`Detector model… ${Math.round(e.loaded * 100)}%`);
+    });
+  },
+});
+
+const results = await detector.detect('Bonjour, comment allez-vous ?');
+// [
+//   { detectedLanguage: 'fr',  confidence: 0.99  },
+//   { detectedLanguage: 'ht',  confidence: 0.004 },
+//   { detectedLanguage: 'und', confidence: 0.001 },
+// ]
+
+// highlight-next-line
+const top = results[0]; // sorted by confidence, best first
+console.log(top.detectedLanguage, top.confidence);
+detector.destroy();
+```
+```ts title="demo.ts"
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+interface LanguageDetectionResult {
+  detectedLanguage: string; // BCP-47 code, or 'und' for unknown
+  confidence: number; // 0..1
+}
+
+const status: Availability = await LanguageDetector.availability();
+
+const detector = await LanguageDetector.create({
+  monitor(m: AICreateMonitor) {
+    m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+      console.log(`Detector model… ${Math.round(e.loaded * 100)}%`);
+    });
+  },
+});
+
+const results: LanguageDetectionResult[] = await detector.detect(
+  'Bonjour, comment allez-vous ?',
+);
+
+// highlight-next-line
+const top = results[0]; // sorted by confidence, best first
+console.log(top.detectedLanguage, top.confidence);
+detector.destroy();
+```
+</CodeTabs>
+
+## Probe the pair before you translate
+
+Here's where translation stops behaving like the other built-in APIs. There
+isn't one model that speaks every language — there's a pack per direction.
+English to Spanish is one download. Spanish to English is another. Japanese to
+German is a third the machine may not have at all.
+
+So availability isn't a single yes/no. You ask per pair —
+`Translator.availability({ sourceLanguage, targetLanguage })` — and you get one
+of the same four states back, scoped to that one direction. Ask about the pair
+you're about to use, before you `create()`, every time.
+
+<CodeTabs>
+```js title="demo.js"
+const sourceLanguage = 'en';
+const targetLanguage = 'es';
+
+// Availability is PER pair — packs download per pair.
+// highlight-next-line
+const status = await Translator.availability({ sourceLanguage, targetLanguage });
+// "unavailable" | "downloadable" | "downloading" | "available"
+
+if (status === 'unavailable') {
+  // This device can't do en → es. Offer another target, or fall back to cloud.
+}
+```
+```ts title="demo.ts"
+const sourceLanguage = 'en';
+const targetLanguage = 'es';
+
+// highlight-next-line
+const status: Availability = await Translator.availability({
+  sourceLanguage,
+  targetLanguage,
+});
+
+if (status === 'unavailable') {
+  // This device can't do en → es. Offer another target, or fall back to cloud.
+}
+```
+</CodeTabs>
+
+## Create a translator and translate
+
+Once the pair says anything but `unavailable`, you `create()` the translator with
+the same two codes. The first time you touch a given pair, Chrome downloads its
+pack — usually 10 to 50 MB — and `create()` doesn't resolve until that finishes.
+So wire the `monitor` from the first line, read `e.loaded` as a 0-to-1 fraction,
+and put something on screen that moves. Then `translate()` hands you the whole
+string back.
+
+<CodeTabs>
+```js title="demo.js"
+const translator = await Translator.create({
+  sourceLanguage,
+  targetLanguage,
+  monitor(m) {
+    m.addEventListener('downloadprogress', (e) => {
+      // e.loaded is a 0..1 fraction — the language pack, not the base model
+      console.log(`Pack ${sourceLanguage}→${targetLanguage}… ${Math.round(e.loaded * 100)}%`);
+    });
+  },
+});
+
+const output = await translator.translate('Hello, how are you?');
+// "Hola, ¿cómo estás?"
+```
+```ts title="demo.ts"
+const translator = await Translator.create({
+  sourceLanguage,
+  targetLanguage,
+  monitor(m: AICreateMonitor) {
+    m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+      console.log(`Pack ${sourceLanguage}→${targetLanguage}… ${Math.round(e.loaded * 100)}%`);
+    });
+  },
+});
+
+const output: string = await translator.translate('Hello, how are you?');
+```
+</CodeTabs>
+
+## Stream longer translations
+
+`translate()` is fine for a sentence. For a paragraph, `translateStreaming()`
+returns a `ReadableStream` and lets you paint the translation as it lands. Same
+rule as every stream in this course: the chunks are deltas, not snapshots. You
+accumulate them.
+
+Append. Don't replace.
+
+Short input often arrives in a single chunk — the streaming payoff shows up past
+a couple hundred characters. Below that, `translate()` is simpler and feels
+identical.
+
+<CodeTabs>
+```js title="demo.js"
+let output = '';
+const stream = translator.translateStreaming(longText);
+for await (const chunk of stream) {
+  // highlight-next-line
+  output += chunk; // deltas — append, never replace
+  render(output);
+}
+```
+```ts title="demo.ts"
+let output = '';
+const stream: ReadableStream<string> = translator.translateStreaming(longText);
+for await (const chunk of stream) {
+  // highlight-next-line
+  output += chunk; // deltas — append, never replace
+  render(output);
+}
+```
+</CodeTabs>
+
+## Chain detect into translate
+
+Now put the two together, which is the whole reason they ship as a pair. Detect
+the source, take the top result, feed its code into the translator as
+`sourceLanguage`. The user picks the target; the source picks itself.
+
+One guard turns this from clever into reliable. If the top guess is `und`, or its
+confidence sits below your floor — 0.4 is a reasonable start — don't translate on
+a hunch. Fall back to a source the user chose, or leave the text alone.
+Translating punctuation out of `und` helps nobody.
+
+<CodeTabs>
+```js title="demo.js"
+async function detectAndTranslate(text, targetLanguage) {
+  const [top] = await detector.detect(text);
+
+  // Bail on unknown or low-confidence guesses instead of translating blind.
+  // highlight-next-line
+  if (!top || top.detectedLanguage === 'und' || top.confidence < 0.4) {
+    return text;
+  }
+  const sourceLanguage = top.detectedLanguage;
+  if (sourceLanguage === targetLanguage) return text;
+
+  const status = await Translator.availability({ sourceLanguage, targetLanguage });
+  if (status === 'unavailable') return text; // or hand off to a cloud translator
+
+  const translator = await Translator.create({ sourceLanguage, targetLanguage });
+  const output = await translator.translate(text);
+  translator.destroy();
+  return output;
+}
+```
+```ts title="demo.ts"
+async function detectAndTranslate(
+  text: string,
+  targetLanguage: string,
+): Promise<string> {
+  const [top] = await detector.detect(text);
+
+  // highlight-next-line
+  if (!top || top.detectedLanguage === 'und' || top.confidence < 0.4) {
+    return text;
+  }
+  const sourceLanguage = top.detectedLanguage;
+  if (sourceLanguage === targetLanguage) return text;
+
+  const status: Availability = await Translator.availability({
+    sourceLanguage,
+    targetLanguage,
+  });
+  if (status === 'unavailable') return text;
+
+  const translator = await Translator.create({ sourceLanguage, targetLanguage });
+  const output: string = await translator.translate(text);
+  translator.destroy();
+  return output;
+}
+```
+</CodeTabs>
+
+## Cache the pack, then destroy
+
+A pack is cached after its first download, so a second translation of the same
+pair is instant and fully offline. The translator instance in front of that pack
+is not free, though — like every built-in AI object, it pins memory until you let
+it go. So keep the instance while the pair stays the same, and the moment the
+pair changes or the tab closes, call `destroy()`. Both of them: the detector and
+the translator. A destroyed instance won't answer again — you build a new one.
+
+Two objects. Two `destroy()` calls. Every time.
+
+<CodeTabs>
+```js title="demo.js"
+// Reuse one translator while the pair is stable; rebuild it when the pair changes.
+if (translator && translatorKey !== `${sourceLanguage}->${targetLanguage}`) {
+  translator.destroy();
+  translator = null;
+}
+
+// Pre-warm a pack you know you'll need, before the user asks for it:
+await Translator.create({ sourceLanguage: 'en', targetLanguage: 'fr' });
+
+// On teardown, free both models.
+// highlight-next-line
+window.addEventListener('beforeunload', () => {
+  detector?.destroy();
+  translator?.destroy();
+});
+```
+```ts title="demo.ts"
+if (translator && translatorKey !== `${sourceLanguage}->${targetLanguage}`) {
+  translator.destroy();
+  translator = null;
+}
+
+await Translator.create({ sourceLanguage: 'en', targetLanguage: 'fr' });
+
+// highlight-next-line
+window.addEventListener('beforeunload', () => {
+  detector?.destroy();
+  translator?.destroy();
+});
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `07-translator-and-language-detector/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo:
+**[live translation demo](https://windowai.danduh.me/translate/translate-demo)**
+(with the [API walkthrough](https://windowai.danduh.me/translate/translate-api-documentation)).
+
+Expected: you paste a non-English sentence, hit Detect and see the top languages
+with confidence percentages, pick a target, and the translation renders — streaming
+in as deltas for longer text.
+
+Requires: desktop Chrome with the Translator and Language Detector available — see
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of the pain here is one of three things: you passed a language tag the
+translator doesn't want, you trusted a guess the detector wasn't sure about, or
+you forgot that a pack has to download before anything works.
+
+:::caution availability() returns unavailable for a language you know exists
+Symptom: `Translator.availability()` says `unavailable` for a language that
+plainly has a pack. Cause: you passed a BCP-47 region tag like `en-US` or
+`pt-BR`, and the translator matches on the base subtag. Fix: strip to the base
+code (`en`, `pt`), or probe the regional code explicitly first. If the base pair
+is still `unavailable`, that direction isn't on this device — fall back to a
+cloud translator.
+:::
+
+:::caution Detection returns und, or a confidence you can't trust
+Symptom: the top result is `und`, or a real language with a confidence near
+zero. Cause: the text is too short, mostly punctuation, or mixed-language —
+under about 20 characters, confidence collapses. Fix: guard on
+`detectedLanguage !== 'und'` plus a confidence floor, then ask the user or use a
+default source instead of translating on the guess.
+:::
+
+:::caution create() hangs on a pair you've never used
+Symptom: the first `create()` for a pair never resolves and nothing shows.
+Cause: the language pack is downloading and you didn't wire a `monitor`, so
+there's nothing visible to wait on. Fix: always pass `monitor(m)` and read
+`e.loaded` (a 0..1 fraction). `create()` resolves when the pack finishes.
+:::
+
+:::caution The streamed translation shows only the tail
+Symptom: the output flickers and ends on a fragment. Cause: you're replacing the
+output with each chunk, but `translateStreaming()` yields deltas, not the full
+text so far. Fix: append — `output += chunk` — and render the accumulated
+`output`.
+:::
+
+:::caution Memory climbs, and other features start failing
+Symptom: a long session gets heavier and other on-device features stall. Cause:
+orphaned detectors and translators pinning memory. Fix: `destroy()` the
+translator when the pair changes, and both instances on teardown. Touch a
+destroyed instance again and it throws — create a fresh one.
+:::
+
+## Recap
+
+- `LanguageDetector.detect()` returns a confidence-ranked list; the top entry is your source, and a trailing `und` means "no idea."
+- Translation availability is per pair: probe `Translator.availability({ sourceLanguage, targetLanguage })` before every `create()`.
+- The first use of a pair downloads its pack; wire a `monitor` and read `e.loaded` as a 0..1 fraction.
+- `translate()` returns the whole string; `translateStreaming()` returns deltas you append.
+- Chain detect into translate through the top result, guarding `und` and low confidence.
+- Cache the translator per pair, and `destroy()` both the detector and the translator on teardown.
+
+The cloud translators are still charging by the character.
+
+## Next steps
+
+- [Live voice translation](./live-voice-translation) — wire the Translator to the Web Speech API and fan one speaker out into live translation columns.
+- [The Summarizer API](./summarizer) — the sibling task API, same `availability()` / `create()` / `destroy()` lifecycle.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable, what's still flagged, and what stays desktop-only.
 
 ---
 

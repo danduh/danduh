@@ -1,33 +1,382 @@
 ---
 title: "The Summarizer API"
-description: On-device summarization with key-points, TL;DR, headline, and teaser modes — steered with sharedContext, streamed for long documents, and hardened against quota limits.
+description: "Summarize text on-device with Chrome's Summarizer API: pick key-points, TL;DR, headline, or teaser, steer with sharedContext, and stream long documents."
 sidebar_position: 6
 sidebar_label: Summarizer
 keywords:
   - Summarizer API
   - text summarization
-  - on-device AI
   - key points
   - TL;DR
+  - sharedContext
+  - on-device AI
 ---
 
 <LessonSchema
   name="The Summarizer API"
-  description="On-device summarization with key-points, TL;DR, headline, and teaser modes — steered with sharedContext, streamed for long documents, and hardened against quota limits."
+  description="Summarize text on-device with Chrome's Summarizer API: pick key-points, TL;DR, headline, or teaser, steer with sharedContext, and stream long documents."
   path="/courses/chrome-built-in-ai/summarizer"
 />
 
 # The Summarizer API
 
-{/* Status: skeleton — beats only. */}
+So. The Summarizer API is the one you reach for when the job is dead simple:
+long text in, short text out. You could ask the raw Prompt API to "summarize
+this in three bullets" and hope it holds the shape — but this is the same Gemini
+Nano wearing a tuned system prompt and a decoder config pointed at exactly that
+one task, so it holds. Key points, a TL;DR, a headline, a teaser. By the end of
+this page you'll gate it on `availability()`, stream a summary a few words at a
+time, and steer its tone with a single line of `sharedContext`.
 
-## Availability and configuration
-## Summary types: key-points, tl;dr, headline, teaser
-## Format and length
-## Steering with sharedContext
-## Streaming summaries
-## Multilingual input
-## Quota and chunking
+## What you'll build
+
+- Gate `Summarizer.create()` behind an `availability()` check and a download `monitor`.
+- Pick the output shape with `type`, `format`, and `length` — key-points, `tl;dr`, teaser, or headline.
+- Summarize in one call with `summarize()`, or stream deltas with `summarizeStreaming()` and append them.
+- Frame every summary in your domain with `sharedContext`, and refine a single input with per-call `context`.
+- Measure input against `inputQuota`, survive `QuotaExceededError`, and `destroy()` the summarizer on teardown.
+
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on. If `Summarizer` isn't on `self`
+yet, work through [Setup & the availability lifecycle](./setup-and-availability)
+first, and keep [the compatibility matrix](./shipping-and-compatibility) handy
+for what's stable where. This page assumes you already know the four
+availability states — it won't re-teach them.
+:::
+
+## Create a summarizer
+
+Same four-step loop as everything else in this course: ask if it's there, create
+it, use it, tear it down. Feature-detect the `Summarizer` global, check
+`availability()`, then `create()` with the shape you want. Summarizer went
+stable in Chrome 138 and needs no flag on current builds — the old
+`#summarization-api-for-gemini-nano` toggle only matters on ancient ones. The
+model downloads on the first `create()`, the same multi-GB one-time hit as the
+Prompt API, so wire the `monitor` from the start.
+
+<CodeTabs>
+```js title="demo.js"
+if (typeof Summarizer === 'undefined') {
+  // No built-in Summarizer here — degrade gracefully (see lesson 2).
+}
+
+const status = await Summarizer.availability();
+// "unavailable" | "downloadable" | "downloading" | "available"
+
+if (status !== 'unavailable') {
+  const summarizer = await Summarizer.create({
+    type: 'key-points',   // 'key-points' | 'tl;dr' | 'teaser' | 'headline'
+    format: 'markdown',   // 'markdown' | 'plain-text'
+    length: 'medium',     // 'short' | 'medium' | 'long'
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        // e.loaded is a 0..1 fraction — there is no e.total in current builds
+        console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
+
+  const summary = await summarizer.summarize('… long article text …');
+  console.log(summary);
+  summarizer.destroy();
+}
+```
+```ts title="demo.ts"
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+const status: Availability = await Summarizer.availability();
+
+if (status !== 'unavailable') {
+  const summarizer = await Summarizer.create({
+    type: 'key-points',
+    format: 'markdown',
+    length: 'medium',
+    monitor(m: AICreateMonitor) {
+      m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+        console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
+
+  const summary: string = await summarizer.summarize('… long article text …');
+  console.log(summary);
+  summarizer.destroy();
+}
+```
+</CodeTabs>
+
+First `create()` on a cold machine blocks on that download. That's the whole
+reason the `monitor` goes in on line one, not bolted on later.
+
+## Pick a type and a length
+
+Four shapes, one size knob. `type` decides what the summary is; `length` decides
+how much of it you get. Don't overthink it — pick the shape that matches where
+the text is going.
+
+| `type` | What you get |
+|---|---|
+| `key-points` | A bulleted list of the main claims. The default, and the one you'll reach for most. |
+| `tl;dr` | A sentence or two — the classic above-the-fold summary. |
+| `teaser` | A hook that makes someone want to read the full thing. |
+| `headline` | One line, news-desk cadence. |
+
+Here's the one that trips people: the TL;DR type is spelled `'tl;dr'`, with the
+semicolon. Not `'tldr'`, not `'tl-dr'`. Type it wrong and `create()` rejects
+with a `NotSupportedError` before you ever see a summary. Copy it from the docs,
+not from memory.
+
+<CodeTabs>
+```js title="demo.js"
+// A one-line headline for a news card:
+const headliner = await Summarizer.create({ type: 'headline', length: 'short' });
+
+// highlight-next-line
+const tldr = await Summarizer.create({ type: 'tl;dr', length: 'short' }); // mind the semicolon
+
+// Roomy key-points for a docs page:
+const notes = await Summarizer.create({
+  type: 'key-points',
+  format: 'markdown',
+  length: 'long',
+});
+```
+```ts title="demo.ts"
+// The valid values, as unions:
+type SummaryType = 'key-points' | 'tl;dr' | 'teaser' | 'headline';
+type SummaryLength = 'short' | 'medium' | 'long';
+
+const headliner = await Summarizer.create({ type: 'headline', length: 'short' });
+
+// highlight-next-line
+const tldr = await Summarizer.create({ type: 'tl;dr', length: 'short' }); // mind the semicolon
+
+const notes = await Summarizer.create({
+  type: 'key-points',
+  format: 'markdown',
+  length: 'long',
+});
+```
+</CodeTabs>
+
+## Summarize once, or stream the deltas
+
+Two ways out, same as the Prompt API. `summarize()` hands you the whole summary
+when it's done — one await, one string. `summarizeStreaming()` hands you a
+`ReadableStream` you loop over with `for await`, and here's the part that bites:
+the chunks are deltas, not the full summary each time. Each chunk is the next
+slice.
+
+Append. Don't replace.
+
+<CodeTabs>
+```js title="demo.js"
+// Whole summary at once:
+const summary = await summarizer.summarize(article);
+
+// Or stream incremental deltas and append them:
+let text = '';
+const stream = summarizer.summarizeStreaming(article);
+for await (const chunk of stream) {
+  // highlight-next-line
+  text += chunk; // deltas — append, never replace
+  render(text);
+}
+```
+```ts title="demo.ts"
+const summary: string = await summarizer.summarize(article);
+
+let text = '';
+const stream: ReadableStream<string> = summarizer.summarizeStreaming(article);
+for await (const chunk of stream) {
+  // highlight-next-line
+  text += chunk; // deltas — append, never replace
+  render(text);
+}
+```
+</CodeTabs>
+
+## Frame it with sharedContext
+
+This is where the Summarizer stops being generic. `sharedContext` is a string
+you set once at `create()` that rides along on every `summarize()` call on that
+instance — a system-prompt-level frame telling the model what this text is and
+what to protect. Same article, different frame, different summary. When one
+specific input needs its own steer, pass a per-call `context` and skip building a
+whole new instance.
+
+<CodeTabs>
+```js title="demo.js"
+const clinical = await Summarizer.create({
+  type: 'key-points',
+  // highlight-next-line
+  sharedContext: 'A section of a medical journal article. Preserve drug names and dosages exactly.',
+});
+
+// A per-call context refines one specific input without a new instance:
+const summary = await clinical.summarize(caseReport, {
+  context: 'Reader is a triage nurse skimming for red flags.',
+});
+```
+```ts title="demo.ts"
+const clinical = await Summarizer.create({
+  type: 'key-points',
+  // highlight-next-line
+  sharedContext: 'A section of a medical journal article. Preserve drug names and dosages exactly.',
+});
+
+const summary: string = await clinical.summarize(caseReport, {
+  context: 'Reader is a triage nurse skimming for red flags.',
+});
+```
+</CodeTabs>
+
+Without it, the summary is correct and lifeless — the kind of bullet list that
+reads the same whether it's compressing a Stripe incident report, a Notion
+meeting note, or a Postgres post-mortem. With it, the output starts sounding like
+it belongs in your product. One string. Load-bearing.
+
+## Mind the input budget
+
+The Summarizer isn't a bucket you can pour a novel into. There's an input quota,
+and a document that blows past it doesn't get politely truncated — it throws.
+Before you feed it something big, measure: `measureInputUsage()` tells you what
+the input costs in tokens, `inputQuota` tells you the ceiling.
+
+<CodeTabs>
+```js title="demo.js"
+const usage = await summarizer.measureInputUsage(article);
+console.log(`${usage} / ${summarizer.inputQuota} input tokens`);
+
+try {
+  const summary = await summarizer.summarize(article);
+} catch (e) {
+  // highlight-next-line
+  if (e.name === 'QuotaExceededError') {
+    // e.requested vs e.quota tells you by how much you overshot.
+    // Split the document, summarize each section, then summarize the summaries.
+  }
+}
+```
+```ts title="demo.ts"
+const usage: number = await summarizer.measureInputUsage(article);
+console.log(`${usage} / ${summarizer.inputQuota} input tokens`);
+
+try {
+  const summary: string = await summarizer.summarize(article);
+} catch (e) {
+  // highlight-next-line
+  if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+    // e.requested vs e.quota tells you by how much you overshot.
+  }
+}
+```
+</CodeTabs>
+
+The fix for a too-big document is the oldest trick in the book: chunk it,
+summarize each chunk, then summarize the chunk-summaries. A summary of summaries.
+Ugly, and it works every time.
+
+## Destroy the summarizer
+
+A live summarizer pins GPU memory the same way a `LanguageModel` session does,
+and Nano is not small. Leave a fistful of them hanging and you'll starve the next
+feature that asks the model for anything. So `destroy()` when you're done, and
+wire it to teardown so a closed tab doesn't leak.
+
+Free it.
+
+<CodeTabs>
+```js title="demo.js"
+summarizer.destroy();
+
+// Wire it to teardown so a closed tab doesn't leak GPU memory:
+window.addEventListener('beforeunload', () => summarizer?.destroy());
+
+// Summarizing after destroy() throws InvalidStateError — create a new one instead.
+```
+```ts title="demo.ts"
+summarizer.destroy();
+
+window.addEventListener('beforeunload', () => summarizer?.destroy());
+
+// Summarizing after destroy() throws InvalidStateError — create a new one instead.
+```
+</CodeTabs>
+
+:::tip Try it
+Run it locally: open `06-summarizer/index.html` from the
+[chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
+Chrome. Or use the hosted demo:
+**[on-device summarizer](https://windowai.danduh.me/summary/summary-demo)** (with
+the [API walkthrough](https://windowai.danduh.me/summary/summary-api-documentation)).
+
+Expected: you paste text, pick a type and length, and the summary streams in a
+few words at a time; switch the type to `headline` and re-run to watch the same
+text collapse to a single line.
+
+Requires: desktop Chrome with Gemini Nano available — see
+[Setup & the availability lifecycle](./setup-and-availability).
+:::
+
+## Gotchas & troubleshooting
+
+Most of these are the Prompt API's gotchas with the serial numbers filed off: you
+didn't wait for the download, you overran the quota, or you treated a streaming
+delta like a snapshot.
+
+:::caution create() never resolves
+Symptom: the first `create()` hangs with no error. Cause: the multi-GB model is
+downloading and you didn't wire a `monitor`, so there's nothing to wait on. Fix:
+pass `monitor(m)` and read `e.loaded` (a 0..1 fraction) for progress. `create()`
+resolves when the download finishes.
+:::
+
+:::caution create() throws NotSupportedError
+Symptom: `create()` rejects before you hold a summarizer. Cause: an unsupported
+option — usually `type: 'tldr'` instead of `'tl;dr'`, or a
+`type`/`format`/`length` combo the build can't serve. Fix: use the exact enum
+values (`'tl;dr'` has a semicolon), and probe a specific config with
+`availability({ type, format, length })` before you commit to it.
+:::
+
+:::caution QuotaExceededError on a long document
+Symptom: `summarize()` rejects with `QuotaExceededError`, carrying `requested`
+and `quota`. Cause: the input is longer than the summarizer's `inputQuota`. Fix:
+call `measureInputUsage()` first, and if it's over the ceiling, split the
+document into sections, summarize each, then summarize the summaries.
+:::
+
+:::caution The streamed summary shows only the last few words
+Symptom: the output flickers and ends on a fragment. Cause: you're replacing the
+output with each chunk, but `summarizeStreaming()` yields deltas, not the full
+summary so far. Fix: accumulate — `text += chunk` — then render the running
+`text`.
+:::
+
+:::caution InvalidStateError when you summarize
+Symptom: `summarize()` throws `InvalidStateError`. Cause: you already called
+`destroy()` on that summarizer. Fix: a destroyed summarizer is gone — create a
+new one. And always `destroy()` on teardown so orphaned instances don't exhaust
+GPU memory.
+:::
+
+## Recap
+
+- `Summarizer.availability()` gates `create()`; wire a `monitor` for the first-run download.
+- `type`, `format`, and `length` set the shape — and the TL;DR type is spelled `'tl;dr'`, semicolon and all.
+- `summarize()` returns the whole thing; `summarizeStreaming()` yields deltas you append.
+- `sharedContext` frames every call on the instance; per-call `context` refines a single input.
+- `measureInputUsage()` against `inputQuota` keeps you clear of `QuotaExceededError`; chunk big documents.
+- `destroy()` frees the model, and a destroyed summarizer doesn't come back.
+
+Everyone else is paying a server to shorten a sentence.
+
+## Next steps
+
+- [The Prompt API (LanguageModel)](./prompt-api) — drop down to the raw model when you need JSON, tools, or conversation instead of a fixed shape.
+- [Writer & Rewriter](./writer-and-rewriter) — the sibling task APIs for drafting new text and reshaping existing text.
+- [Shipping & compatibility](./shipping-and-compatibility) — what's stable, what's still flagged, and what stays desktop-only.
 
 ---
 
