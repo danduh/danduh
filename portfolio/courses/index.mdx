@@ -1,6 +1,6 @@
 ---
 title: Courses
-description: Hands-on, code-first courses on shipping real AI — starting with Chrome's built-in, on-device AI APIs.
+description: Free, code-first courses on shipping real AI — starting with Chrome's built-in, on-device AI APIs (Gemini Nano), each lesson with a runnable demo.
 slug: /
 sidebar_position: 0
 sidebar_label: All courses
@@ -9,18 +9,33 @@ keywords:
   - Chrome built-in AI
   - on-device AI
   - web AI course
+  - Gemini Nano
 ---
+
+<CourseSchema
+  name="Chrome's Built-in AI — from 0 to superhero"
+  description="A hands-on, code-first course on Chrome's built-in, on-device AI: the Prompt API, task APIs, embeddings, and the agentic/MCP layer, plus observability and evaluation."
+  path="/courses/chrome-built-in-ai/introduction"
+/>
 
 # Courses
 
 Code-first courses on building AI that actually ships. Each course is a set of
-ordered pages you can read straight through or dip into.
+ordered lessons you can read straight through or dip into — and every lesson
+comes with a runnable, framework-free demo you can open in the browser.
 
-{/* Skeleton landing — cards/prose land in the writing pass. */}
+## Chrome's Built-in AI — from 0 to superhero
 
-## Available courses
+On-device Gemini Nano, handed to your page as plain web APIs: no backend, no API
+keys, no per-call cost, and nothing leaving the machine. Seventeen lessons take
+you from a first `availability()` check all the way to shipping — the Prompt
+API, structured output and tools, multimodal image input, the task APIs
+(Summarizer, Translator, Language Detector, Writer, Rewriter, Proofreader),
+on-device embeddings, and the agentic layer (WebMCP, Generative UI, an in-browser
+MCP client) — then the production tail: observability and evaluation.
 
-- [**Chrome's Built-in AI** — from 0 to superhero](./chrome-built-in-ai/introduction)
-  On-device Gemini Nano in the browser: the Prompt API, Summarizer, Translator,
-  Writer/Rewriter, Proofreader, Embeddings, Multimodal, WebMCP — plus
-  observability and evaluation.
+[Start with the introduction →](./chrome-built-in-ai/introduction)
+
+Every lesson has a runnable demo in the companion repo
+([github.com/danduh/chrome-ai-course](https://github.com/danduh/chrome-ai-course)),
+with hosted versions at [windowai.danduh.me](https://windowai.danduh.me/).

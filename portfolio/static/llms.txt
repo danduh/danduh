@@ -3,20 +3,27 @@
 > Daniel Ostrovsky — AI Architect. Agentic systems, evaluation, governance,
 > fine-tuning, MCP, and on-device/browser AI, mostly in JavaScript/TypeScript.
 
+Daniel Ostrovsky is an AI Architect who writes and speaks about AI-assisted
+engineering, on-device AI, system architecture, and the future of web
+development. This file indexes the primary content on danduh.me for language
+models.
+
 ## Courses
 
 ### Chrome's Built-in AI — from 0 to superhero
 On-device Gemini Nano in the browser: no backend, no API keys, no data leaving
-the machine.
+the machine. Every lesson ships with a runnable, framework-free demo.
+Companion demo repo: https://github.com/danduh/chrome-ai-course
+Hosted demos: https://windowai.danduh.me/
 
 - [Introduction](https://danduh.me/courses/chrome-built-in-ai/introduction): AI in the browser, on-device.
 - [Setup & the availability lifecycle](https://danduh.me/courses/chrome-built-in-ai/setup-and-availability): flags, availability() states, downloads, graceful degradation.
 - [The Prompt API (LanguageModel)](https://danduh.me/courses/chrome-built-in-ai/prompt-api): sessions, prompts, streaming, parameters, tokens.
 - [Structured output & tool calling](https://danduh.me/courses/chrome-built-in-ai/structured-output-and-tools): responseFormat, tools, the intent-loop workaround.
-- [Multimodal: image input](https://danduh.me/courses/chrome-built-in-ai/multimodal): drag/paste, webcam, live loop.
+- [Multimodal: image input](https://danduh.me/courses/chrome-built-in-ai/multimodal): expectedInputs, content parts, drag/paste.
 - [The Summarizer API](https://danduh.me/courses/chrome-built-in-ai/summarizer): key-points, tl;dr, headline, teaser.
 - [Translator + Language Detector](https://danduh.me/courses/chrome-built-in-ai/translator-and-language-detector): detection and translation, on-device.
-- [Live voice translation](https://danduh.me/courses/chrome-built-in-ai/live-voice-translation): Web Speech + Translator.
+- [Live voice translation](https://danduh.me/courses/chrome-built-in-ai/live-voice-translation): Web Speech + the on-device Translator.
 - [Writer & Rewriter](https://danduh.me/courses/chrome-built-in-ai/writer-and-rewriter): generate and transform text.
 - [The Proofreader API](https://danduh.me/courses/chrome-built-in-ai/proofreader): grammar/spelling corrections with diffs.
 - [Embeddings (SemanticEmbedder)](https://danduh.me/courses/chrome-built-in-ai/embeddings): vectors, task types, semantic search.
@@ -29,4 +36,25 @@ the machine.
 
 ## Blog
 
-- [Blog index](https://danduh.me/blog): essays on AI architecture, agents, MCP, and production AI.
+- [MCP 2.0 Is Mostly Deletion. That's The Good Part.](https://danduh.me/blog/mcp-goes-stateless): The 2026-07-28 Model Context Protocol revision goes stateless — the session is removed, application state becomes explicit handles, elicitation/sampling become Multi Round-Trip Requests, Tasks and UI move to extensions, and OAuth 2.1 gets hardened. What actually breaks, who has real migration work, and the per-call authorization gap it leaves unfixed. Topics: MCP, Model Context Protocol, stateless protocol, MCP tasks, MCP apps, MCP authorization, agents.
+- [You Can't Make Your Company AI Native Without Dealing With This First](https://danduh.me/blog/ai-native-knowledge): Becoming an AI native company hinges on the one thing almost everyone misses — whether your organizational knowledge is structured, trusted, and accessible to AI at every step of the product lifecycle. Covers knowledge silos across tools, trust scoring (production code = ground truth), staged trust elevation, and temporal feature memory (GraphRAG / Graphiti). Topics: AI, architecture, AI native, knowledge graph, GraphRAG, context rot, institutional memory.
+- [AI Is Building Code Nobody Can Maintain. You're Next.](https://danduh.me/blog/ai-amnesia-graphrag): Organizations ship code faster than ever — and forget faster than ever. How a GraphRAG-backed knowledge graph gives your org (and your AI agents) real long-term memory. Topics: AI, architecture, GraphRAG, knowledge graphs, institutional memory.
+
+## Site
+
+- [Courses](https://danduh.me/courses): Code-first courses on shipping real AI, starting with Chrome's built-in, on-device AI.
+- [Blog](https://danduh.me/blog): Long-form posts on AI architecture and maintainable engineering.
+- [Articles](https://danduh.me/articles): Articles & insights, syndicated from Medium.
+- [Videos](https://danduh.me/videos): Talks, tutorials, and video content.
+- [Conferences](https://danduh.me/conferences): Speaking engagements — talks on UI, AI, and the future of web development.
+- [Projects](https://danduh.me/projects): Things I've built — browser-native AI demos and Chrome extensions (window.ai, an E2E test page-object generator, a LinkedIn post formatter).
+- [Contact](https://danduh.me/contact): Get in touch with Daniel Ostrovsky.
+
+## Optional
+
+- [Medium](https://medium.com/@danduh): Full archive of published articles.
+- [YouTube](https://www.youtube.com/@danduh81): Video and talk recordings.
+- [GitHub](https://github.com/danduh): Open-source projects and code.
+- [LinkedIn](https://www.linkedin.com/in/danduh/): Professional profile.
+- [X / Twitter](https://x.com/danduh81): Short-form updates.
+- [Linktree](https://linktr.ee/danduh): All links in one place.
