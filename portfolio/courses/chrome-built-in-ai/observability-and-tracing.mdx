@@ -56,7 +56,7 @@ That last row is the tell. The only genuine confidence number in the entire buil
 
 Timings and sizes. That's the raw material, so that's what the tracer is built from.
 
-One footgun before you read any of it. The Prompt API renamed its accounting fields: `inputUsage` became `contextUsage`, `inputQuota` became `contextWindow`, and `measureInputUsage()` became `measureContextUsage()`. MDN and the Extensions docs still show the old names, and some Chrome builds still expose them. So read defensively — `session.contextUsage ?? session.inputUsage` — and stop guessing which browser you're on.
+One thing to fix in your head before the code: context accounting is Prompt API only. Read `session.contextUsage` against `session.contextWindow`. Nothing else in the built-in AI surface exposes it.
 
 ## Level 0 — time the call with console.log
 
@@ -112,7 +112,7 @@ interface AiSpan {
   finish: AiFinish;
   ttftMs?: number;       // streaming only: time to first chunk
   outChars?: number;     // char proxy, NOT a token count
-  contextUsage?: number; // Prompt API only (drift-safe against inputUsage)
+  contextUsage?: number; // Prompt API only
   contextWindow?: number;
   errorName?: string;    // DOMException.name on failure
 }
@@ -162,9 +162,9 @@ function traceStream(api, op, session, run) {
     span.outChars = chars;
     span.finish = finish;
     if (errorName) span.errorName = errorName;
-    try { // Prompt API only — drift-safe; getters can throw on a destroyed session
-      span.contextUsage = session?.contextUsage ?? session?.inputUsage;
-      span.contextWindow = session?.contextWindow ?? session?.inputQuota;
+    try { // Prompt API only — getters can throw on a destroyed session
+      span.contextUsage = session?.contextUsage;
+      span.contextWindow = session?.contextWindow;
     } catch { /* session gone — skip the numbers */ }
     emit(span);
   };
@@ -211,9 +211,9 @@ function traceStream(
     span.finish = finish;
     if (errorName) span.errorName = errorName;
     try {
-      const s = session as { contextUsage?: number; contextWindow?: number; inputUsage?: number; inputQuota?: number };
-      span.contextUsage = s?.contextUsage ?? s?.inputUsage;
-      span.contextWindow = s?.contextWindow ?? s?.inputQuota;
+      const s = session as { contextUsage?: number; contextWindow?: number };
+      span.contextUsage = s?.contextUsage;
+      span.contextWindow = s?.contextWindow;
     } catch { /* session gone — skip the numbers */ }
     emit(span);
   };
@@ -342,9 +342,9 @@ Most of these come from tracing the wrong kind of call, or expecting a signal on
 :::caution contextUsage is always undefined
 Symptom: your span never carries `contextUsage` or `contextWindow`.
 
-Cause: one of three. You're tracing the Summarizer or Translator, which don't expose context accounting — that's Prompt API only. Or you read it after `destroy()`, and the getter threw. Or the build still uses the old `inputUsage` names.
+Cause: one of two. You're tracing the Summarizer or Translator, which don't expose context accounting — that's Prompt API only. Or you read it after `destroy()`, and the getter threw.
 
-Fix: read drift-safe with `session.contextUsage ?? session.inputUsage`, read it before you destroy the session, and expect it to be absent on every API except the Prompt API.
+Fix: read `session.contextUsage` before you destroy the session, and expect it to be absent on every API except the Prompt API.
 :::
 
 :::caution TTFT is missing or equals latency
@@ -384,7 +384,7 @@ Everyone else is paying Datadog to trace a call that never left the tab.
 ## Next steps
 
 - [Evaluation](./evaluation) — once you can see every call, measure whether the output was any good.
-- [The Prompt API (LanguageModel)](./prompt-api) — where `contextUsage` and `contextWindow` come from, and the naming drift you read around.
+- [The Prompt API (LanguageModel)](./prompt-api) — where `contextUsage` and `contextWindow` come from.
 - [Shipping & compatibility](./shipping-and-compatibility) — what's stable across the browser matrix before you wire telemetry to any of it.
 
 ---

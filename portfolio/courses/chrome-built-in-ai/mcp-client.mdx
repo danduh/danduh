@@ -195,9 +195,8 @@ Nano never touches the wire. It just points.
 
 Why the loop and not the native `tools` array? Because on the Chrome build this
 was written against, native tool calling dropped calls on the floor, and the loop
-leans only on `responseFormat`, which has been solid since the Prompt API reached
-the open web. Same trade you made in the tool-calling lesson — reach for the loop
-when strangers run your code.
+leans only on `responseConstraint`. Same trade you made in the tool-calling lesson —
+reach for the loop when strangers run your code.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -216,13 +215,13 @@ const INTENT_SCHEMA = {
 if ((await LanguageModel.availability()) !== 'available') return;
 const session = await LanguageModel.create({
   outputLanguage: 'en',            // load-bearing — omit it and the JSON degrades
-  responseFormat: INTENT_SCHEMA,
   initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }], // lists the server's tools
 });
 
 let next = question;
 for (let i = 0; i < 8; i++) { // cap the turns (MAX_TOOL_CALLS)
-  const step = extractJsonFromResponse(await session.prompt(next)); // fence-stripping parse
+  // responseConstraint rides on each prompt(), not create()
+  const step = extractJsonFromResponse(await session.prompt(next, { responseConstraint: INTENT_SCHEMA })); // fence-stripping parse
   if (!step || step.toolName === 'done') { render(step?.reply ?? 'Done.'); break; }
   const result = await callTool(transport, step.toolName, coerceArgs(step.args)); // remote tools/call
   next = `Tool "${step.toolName}" result: ${result}. Call the next tool, or emit {"toolName":"done","reply":"..."}.`;
@@ -246,13 +245,13 @@ const INTENT_SCHEMA = {
 if ((await LanguageModel.availability()) !== 'available') throw new Error('unavailable');
 const session = await LanguageModel.create({
   outputLanguage: 'en',
-  responseFormat: INTENT_SCHEMA,
   initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }],
 });
 
 let next = question;
 for (let i = 0; i < 8; i++) {
-  const step = extractJsonFromResponse(await session.prompt(next)) as Step | null;
+  // responseConstraint rides on each prompt(), not create()
+  const step = extractJsonFromResponse(await session.prompt(next, { responseConstraint: INTENT_SCHEMA })) as Step | null;
   if (!step || step.toolName === 'done') { render(step?.reply ?? 'Done.'); break; }
   const result = await callTool(transport, step.toolName, coerceArgs(step.args));
   next = `Tool "${step.toolName}" result: ${result}. Call the next tool, or emit {"toolName":"done","reply":"..."}.`;
@@ -354,7 +353,7 @@ back, and expect to bump it again.
 
 - An MCP client is three JSON-RPC calls over Streamable HTTP — `initialize`, `tools/list`, `tools/call` — plus the `notifications/initialized` handshake and the `Mcp-Session-Id` you echo on every request.
 - `tools/call` returns content blocks; flatten them to a string before the model reads them.
-- The bridge to on-device Nano is the same intent loop: a `responseFormat` schema, the tools in the system prompt, and a capped prompt → parse → call → feed-back cycle.
+- The bridge to on-device Nano is the same intent loop: a `responseConstraint` schema, the tools in the system prompt, and a capped prompt → parse → call → feed-back cycle.
 - CORS is the wall: the server must allow your origin and expose `Mcp-Session-Id`, or you run a proxy. The bearer token stays in memory and authorizes the whole session, not one call.
 
 That's the whole stack — a model that never leaves the device, tools on a server

@@ -43,7 +43,7 @@ One more flag sits under every row: `#optimization-guide-on-device-model`, set t
 
 Every row also needs the same host. Desktop only — Windows 10 and up, macOS 13 and up, Linux, and nothing on Android, iOS, or ChromeOS. Roughly 22 GB of free disk, because Chrome auto-purges the 4 GB model when you drop under that, or after about 30 days idle. A GPU with over 4 GB of VRAM, or a 16 GB-RAM tier. A non-metered network for the first download, and a secure context. Miss any one of those and `availability()` comes back `unavailable` with no flag you can flip to fix it — the hardware bar is covered in [Setup & the availability lifecycle](./setup-and-availability).
 
-Two footnotes the table can't hold. The Prompt API's image input is that same `LanguageModel` global — you opt in with `expectedInputs`, there's no separate global — but pre-148 Canary needed `#prompt-api-for-gemini-nano-multimodal-input`, since retired. And the Proofreader flag is genuinely two-faced: the live capabilities check reads `#proofreader-api`, while the shipped Proofreader page tells you to enable `#proofreader-api-for-gemini-nano`. Enable whichever your Chrome actually exposes — they gate the same API. WebMCP's entry point is `document.modelContext`; the old `navigator.modelContext` is deprecated as of Chrome 150.
+Two footnotes the table can't hold. The Prompt API's image input is that same `LanguageModel` global — you opt in with `expectedInputs`, there's no separate global — but pre-148 Canary needed `#prompt-api-for-gemini-nano-multimodal-input`, since retired. And the Proofreader flag is genuinely two-faced: the live capabilities check reads `#proofreader-api`, while the shipped Proofreader page tells you to enable `#proofreader-api-for-gemini-nano`. Enable whichever your Chrome actually exposes — they gate the same API. WebMCP's entry point is `document.modelContext`.
 
 ## Feature-detect everything
 
@@ -223,24 +223,6 @@ window.addEventListener('beforeunload', () => session.destroy());
 
 Leak enough of these and the next `create()` fails on a machine that had plenty of room ten sessions ago. It won't look like your bug. It is.
 
-## The naming drift
-
-The Prompt API renamed its token-accounting fields mid-flight, and both spellings are loose in the wild depending on which Chrome your user is on. Read defensively or your usage meter throws `undefined` on half your installs.
-
-| Older name | Current name |
-|---|---|
-| `session.inputUsage` | `session.contextUsage` |
-| `session.inputQuota` | `session.contextWindow` |
-| `session.measureInputUsage()` | `session.measureContextUsage()` |
-
-The fix is a nullish coalesce — reach for the new name, fall back to the old one, survive either build.
-
-```js title="drift.js"
-const used = session.contextUsage ?? session.inputUsage;
-const limit = session.contextWindow ?? session.inputQuota;
-const left = limit - used;
-```
-
 ## The pre-ship checklist
 
 Run this before it goes anywhere near a user. Not a vibe — a list you tick.
@@ -267,7 +249,6 @@ Don't trust a table — trust the browser in front of you. The live capabilities
 - Feature-detect `typeof X !== 'undefined'` in a secure context, then `availability()`, before you create anything.
 - Treat built-in AI as an enhancement: handle all four states, wire a `monitor` for the download, and always keep a fallback for `unavailable`.
 - `destroy()` every session and clone, or orphaned sessions pin GPU memory until the tab dies.
-- Read the Prompt API's usage fields defensively — `session.contextUsage ?? session.inputUsage` — because the names drifted.
 - Pin your evals and re-run them on every Chrome release; Nano moves under you with no version to query.
 
 Sixteen lessons ago, [the introduction](./introduction) handed you a model that already lives on your users' machines, free. This last page is the tax on that gift: detect it, fall back when it's missing, free what you open, and re-check the matrix every time Chrome ships. Do the boring parts and the free model stays free.

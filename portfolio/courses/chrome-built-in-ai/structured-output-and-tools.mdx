@@ -1,11 +1,11 @@
 ---
 title: "Structured output & tool calling"
-description: Force Chrome built-in AI to return JSON with responseFormat, wire real functions as tools, and build the intent-loop fallback that keeps tool calling reliable.
+description: Force Chrome built-in AI to return JSON with responseConstraint, wire functions as tools, and build the intent-loop fallback that keeps tool calling reliable.
 sidebar_position: 4
 sidebar_label: Structured output & tools
 keywords:
   - structured output
-  - responseFormat
+  - responseConstraint
   - tool calling
   - function calling
   - JSON schema
@@ -13,7 +13,7 @@ keywords:
 
 <LessonSchema
   name="Structured output & tool calling"
-  description="Force JSON output with responseFormat, wire real functions as tools, and build the intent-loop fallback that keeps tool calling reliable."
+  description="Force JSON output with responseConstraint, wire real functions as tools, and build the intent-loop fallback that keeps tool calling reliable."
   path="/courses/chrome-built-in-ai/structured-output-and-tools"
 />
 
@@ -28,7 +28,7 @@ when the native path quietly dies.
 
 ## What you'll build
 
-- Constrain a session to a JSON Schema with `responseFormat` and parse the result safely.
+- Constrain a session to a JSON Schema with `responseConstraint` and parse the result safely.
 - Read the four JSON Schema keywords that matter here: `type`, `properties`, `enum`, `required`.
 - Wire a native tool with `create({ tools })` and an `execute` handler that returns a string.
 - Run an intent loop that dispatches to local functions turn by turn when native tools aren't enabled.
@@ -41,17 +41,15 @@ Desktop Chrome with built-in AI, and you've already met the session lifecycle in
 are stable on which Chrome, see [the compatibility matrix](./shipping-and-compatibility).
 :::
 
-## Force JSON with responseFormat
+## Force JSON with responseConstraint
 
 Here's the move everyone reaches for first: prompt the model in plain English,
 then parse whatever comes back with a regex you'll be maintaining forever. Don't.
 The reliable move has a name — constrain, don't parse. You pass a JSON Schema as
-`responseFormat` (the spec calls the option `responseConstraint`; Chrome ships it
-today as `responseFormat`, so that's what the code uses), and the runtime masks
-any token that would break the schema while it decodes. One catch: the reply is
-still a string, so you `JSON.parse()` it. And you keep a fence guard, because a
-model that promised you clean JSON will occasionally wrap it in a fenced code
-block anyway.
+`responseConstraint` on the `prompt()` call, and the runtime masks any token that
+would break the schema while it decodes. One catch: the reply is still a string,
+so you `JSON.parse()` it. And you keep a fence guard, because a model that
+promised you clean JSON will occasionally wrap it in a fenced code block anyway.
 
 A schema and a parse. That's the whole trick.
 
@@ -78,9 +76,9 @@ const session = await LanguageModel.create({
   ],
 });
 
-// responseFormat forces the reply to match EXTRACT_SCHEMA.
+// responseConstraint forces the reply to match EXTRACT_SCHEMA.
 const raw = await session.prompt(`Extract from this review:\n\n${review}`, {
-  responseFormat: EXTRACT_SCHEMA,
+  responseConstraint: EXTRACT_SCHEMA,
 });
 
 const data = parseJson(raw); // the reply is a STRING — parse it (guard below)
@@ -88,7 +86,7 @@ console.log(data.sentiment, data.topics, data.summary);
 
 session.destroy();
 
-// Some builds still wrap JSON in a fenced block — peel it off, then parse.
+// The model sometimes wraps JSON in a fence — peel it off, then parse.
 function parseJson(text) {
   const s = String(text).trim();
   const fenced = s.match(/^`{3}(?:json)?\s*\n?([\s\S]*?)\n?`{3}$/);
@@ -122,7 +120,7 @@ const session = await LanguageModel.create({
 });
 
 const raw: string = await session.prompt(`Extract from this review:\n\n${review}`, {
-  responseFormat: EXTRACT_SCHEMA,
+  responseConstraint: EXTRACT_SCHEMA,
 });
 
 const data = parseJson<Extraction>(raw);
@@ -217,7 +215,7 @@ Now the part the docs skip. That clean `tools` array is lovely when it works, an
 on recent Canary builds it often doesn't — you wire everything up correctly, call
 `prompt()`, and Chrome answers with `Tool use feature not enabled` or just never
 touches your function. So you stop trusting the feature and lean on the one thing
-that's rock solid: `responseFormat`.
+that's rock solid: `responseConstraint`.
 
 The trick is to make the model emit its intent as JSON and run the tools yourself.
 One schema — `{ toolName, args, reply }`, with `toolName` required. A system prompt
@@ -254,13 +252,13 @@ const system = [
 
 const session = await LanguageModel.create({
   outputLanguage: 'en',
-  responseFormat: INTENT_SCHEMA,
   initialPrompts: [{ role: 'system', content: system }],
 });
 
 let next = question; // the user's question
 for (let i = 0; i < 8; i++) {
-  const step = parseJson(await session.prompt(next)); // fence-strip guard from step 1
+  // responseConstraint rides on each prompt(), not create()
+  const step = parseJson(await session.prompt(next, { responseConstraint: INTENT_SCHEMA })); // fence-strip guard from step 1
   if (!step || step.toolName === 'done') {
     render(step?.reply ?? 'Done.');
     break;
@@ -299,13 +297,13 @@ const system = [
 
 const session = await LanguageModel.create({
   outputLanguage: 'en',
-  responseFormat: INTENT_SCHEMA,
   initialPrompts: [{ role: 'system', content: system }],
 });
 
 let next = question;
 for (let i = 0; i < 8; i++) {
-  const step = parseJson<Step>(await session.prompt(next));
+  // responseConstraint rides on each prompt(), not create()
+  const step = parseJson<Step>(await session.prompt(next, { responseConstraint: INTENT_SCHEMA }));
   if (!step || step.toolName === 'done') {
     render(step?.reply ?? 'Done.');
     break;
@@ -324,10 +322,9 @@ session.destroy();
 So which one do you ship? Depends on who runs your code. If you control the
 browser — a demo, an internal tool, your own Canary — native `tools` is less code
 and reads cleaner. If strangers run it on whatever Chrome they happen to have, the
-loop is the safe bet, because it leans only on `responseFormat`, and structured
-output has been stable since the Prompt API reached the open web. Same model, same
-JSON Schema muscle — the loop just moves the dispatch into a `for` loop you can
-watch.
+loop is the safe bet, because it leans only on `responseConstraint`. Same model,
+same JSON Schema muscle — the loop just moves the dispatch into a `for` loop you
+can watch.
 
 | You want | Reach for |
 |---|---|
@@ -355,7 +352,7 @@ Requires: desktop Chrome with Gemini Nano available — see
 
 :::caution Your parse throws on valid-looking JSON
 Symptom: `JSON.parse()` throws `Unexpected token` on output that looks like JSON.
-Cause: the model wrapped it in a fenced code block even with `responseFormat` set —
+Cause: the model wrapped it in a fenced code block even with `responseConstraint` set —
 it still happens. Fix: keep the fence-stripping `parseJson` from step 1 and never
 call bare `JSON.parse()` on model output.
 :::
@@ -363,8 +360,7 @@ call bare `JSON.parse()` on model output.
 :::caution The model ignores your tools
 Symptom: you pass a `tools` array, but `execute` never runs — or `prompt()` throws
 `Tool use feature not enabled`. Cause: native tool calling is unreliable on recent
-Canary builds. Fix: switch to the intent loop; it needs only `responseFormat`,
-which is stable.
+Canary builds. Fix: switch to the intent loop; it needs only `responseConstraint`.
 :::
 
 :::caution Tool result comes back as `[object Object]`
@@ -389,10 +385,10 @@ on teardown.
 
 ## Recap
 
-- `responseFormat` (spec: `responseConstraint`) constrains a session to a JSON Schema; the reply is a string, so `JSON.parse()` it behind a fence guard.
+- `responseConstraint` — a JSON Schema you pass to `prompt()` — constrains the reply; that reply is a string, so `JSON.parse()` it behind a fence guard.
 - The four keywords that matter: `type`, `properties`, `enum`, `required`.
 - Native tools are `{ name, description, inputSchema, execute }`, and `execute` returns a `Promise<string>`.
-- When native tools aren't enabled, the intent loop — `responseFormat` plus a `{ toolName, args, reply }` schema plus a capped prompt/parse/run/feed cycle — does the same job everywhere.
+- When native tools aren't enabled, the intent loop — `responseConstraint` plus a `{ toolName, args, reply }` schema plus a capped prompt/parse/run/feed cycle — does the same job everywhere.
 
 Structured output and the loop are the same instinct pointed two directions: stop
 hoping the model behaves, and take away its room to misbehave. The parser you

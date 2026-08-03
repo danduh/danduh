@@ -23,7 +23,7 @@ So here's the WebMCP pitch: your page already has buttons, and behind each one i
 
 ## What you'll build
 
-- Resolve the moving entry point — `document.modelContext ?? navigator.modelContext` — and feature-detect it before you touch it.
+- Register tools on `document.modelContext` and feature-detect it before you touch it.
 - Describe a page action as a tool descriptor: `name`, `description`, `inputSchema`, and an `execute` handler.
 - Register the whole set under one `AbortController` and tear it all down with a single `abort()`.
 - Wire an in-page `LanguageModel` agent that calls those exact tools through the intent loop.
@@ -39,13 +39,12 @@ For twenty-five years, automating a web app meant one of three miserable options
 
 The teams already prototyping against it are the deep-state, transactional ones — Booking.com, Shopify, Instacart, TurboTax — the apps where "the agent does my work" means checkout, filing, a listing. And the reason it beats pixel-peeping is boring arithmetic: a named tool call with a validated schema lands somewhere around 98% task accuracy against a fraction of the tokens, because the agent stops reverse-engineering a UI from a screenshot.
 
-One catch before any of it works. The entry point moved. As of Chrome 150 the API lives on `document.modelContext`; the old `navigator.modelContext` is deprecated and will be removed. So you resolve both, prefer `document`, and bail to a banner if neither is there.
+One thing first. The page's tools live on `document.modelContext` — feature-detect it, and bail to a banner if it's missing.
 
 <CodeTabs>
-```js title="demo.js" {3}
-// The entry point moved: document.modelContext is Chrome 150+,
-// navigator.modelContext is the deprecated 146–149 fallback. Resolve both.
-const modelContext = document.modelContext ?? navigator.modelContext;
+```js title="demo.js" {2}
+// WebMCP tools live on document.modelContext. Feature-detect it before you touch it.
+const modelContext = document.modelContext;
 
 if (!modelContext) {
   // No flag, or an http page — WebMCP needs a secure context. Degrade:
@@ -55,11 +54,10 @@ if (!modelContext) {
   registerTools(modelContext); // safe to call now
 }
 ```
-```ts title="demo.ts" {4-5}
-// document.modelContext / navigator.modelContext are ambient — Chrome ships no
-// public types yet, so declare the ModelContext shape you use.
-const modelContext: ModelContext | undefined =
-  document.modelContext ?? navigator.modelContext;
+```ts title="demo.ts" {3}
+// document.modelContext is ambient — Chrome ships no public types yet, so
+// declare the ModelContext shape you use.
+const modelContext: ModelContext | undefined = document.modelContext;
 
 if (!modelContext) {
   showFlagBanner('Enable chrome://flags/#enable-webmcp-testing to expose tools.');
@@ -162,21 +160,21 @@ window.addEventListener('beforeunload', () => controller.abort());
 
 Registering tools makes them visible to external agents. To let the page's own model call them, you bridge — because on today's Chrome a `LanguageModel` session doesn't automatically inherit the WebMCP registry. And the bridge is a loop you already wrote in the tools lesson.
 
-Same intent loop, same reasons. Create a session with a `responseFormat` schema of `{ toolName, args, reply }`, a system prompt that lists the tools, then loop: prompt, parse, run the named tool, feed the result back. The one WebMCP-specific line is the coercion — `execute` resolves to `unknown`, and the loop feeds text, so you stringify anything that isn't already a string. The dispatch looks each tool up in the same `CART_TOOLS` array you registered. One definition, two consumers.
+Same intent loop, same reasons. Create the session with a system prompt that lists the tools, then loop: prompt with a `responseConstraint` schema of `{ toolName, args, reply }`, parse, run the named tool, feed the result back. The one WebMCP-specific line is the coercion — `execute` resolves to `unknown`, and the loop feeds text, so you stringify anything that isn't already a string. The dispatch looks each tool up in the same `CART_TOOLS` array you registered. One definition, two consumers.
 
 <CodeTabs>
-```js title="demo.js" {5-6}
+```js title="demo.js" {10-11}
 // Reuse the intent loop from the tools lesson and dispatch into CART_TOOLS —
 // the exact array registered on document.modelContext above.
 const session = await LanguageModel.create({
-  outputLanguage: 'en',          // load-bearing — omit it and JSON comes back fenced
-  responseFormat: INTENT_SCHEMA, // { toolName, args, reply }; toolName required
+  outputLanguage: 'en', // load-bearing — omit it and JSON comes back fenced
   initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }], // lists the tools
 });
 
 let next = question; // e.g. "add milk and a dozen eggs, then show the cart"
 for (let i = 0; i < 8; i++) {
-  const step = parseJson(await session.prompt(next)); // fence-stripping parse
+  // responseConstraint — the { toolName, args, reply } schema — rides on prompt().
+  const step = parseJson(await session.prompt(next, { responseConstraint: INTENT_SCHEMA })); // fence-stripping parse
   if (!step || step.toolName === 'done') {
     render(step?.reply ?? 'Done.');
     break;
@@ -189,18 +187,17 @@ for (let i = 0; i < 8; i++) {
 
 session.destroy(); // free the model; controller.abort() frees the tools
 ```
-```ts title="demo.ts" {4-5}
+```ts title="demo.ts" {10}
 type Step = { toolName: string; args?: Record<string, unknown>; reply?: string };
 
 const session = await LanguageModel.create({
   outputLanguage: 'en',
-  responseFormat: INTENT_SCHEMA,
   initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }],
 });
 
 let next = question;
 for (let i = 0; i < 8; i++) {
-  const step = parseJson<Step>(await session.prompt(next));
+  const step = parseJson<Step>(await session.prompt(next, { responseConstraint: INTENT_SCHEMA }));
   if (!step || step.toolName === 'done') {
     render(step?.reply ?? 'Done.');
     break;
@@ -226,15 +223,14 @@ So you never make it load-bearing. Feature-detect both surfaces, register the to
 // Local dev uses the flag. A deployed origin registers an origin-trial token in
 // a <meta http-equiv="origin-trial"> tag, so document.modelContext exists for
 // visitors who never touch chrome://flags. Either way, gate both surfaces.
-const modelContext = document.modelContext ?? navigator.modelContext;
+const modelContext = document.modelContext;
 const canAgent = typeof LanguageModel !== 'undefined';
 
 if (!modelContext) showFlagBanner(); // tools can't register — the cart still works
 if (!canAgent) disableAgent();       // no in-page agent — external agents can still call
 ```
 ```ts title="demo.ts"
-const modelContext: ModelContext | undefined =
-  document.modelContext ?? navigator.modelContext;
+const modelContext: ModelContext | undefined = document.modelContext;
 const canAgent = typeof LanguageModel !== 'undefined';
 
 if (!modelContext) showFlagBanner();
@@ -262,10 +258,10 @@ Requires: desktop Chrome with WebMCP enabled and Gemini Nano available — see
 
 :::caution Works on one Chrome, undefined on another
 Symptom: registration runs on your machine and throws on a colleague's.
-Cause: you reached for `navigator.modelContext`, which is deprecated in Chrome 150
-and absent where the API moved to `document`. Fix: always resolve
-`document.modelContext ?? navigator.modelContext` and prefer `document`; never
-hardcode one surface.
+Cause: `document.modelContext` only exists where WebMCP is switched on — your flag
+is set and theirs isn't, or their page isn't a secure context. Fix: feature-detect
+`document.modelContext` and bail to a banner; never assume the surface is there
+just because it was on your machine.
 :::
 
 :::caution DOMException: duplicate tool name
@@ -279,8 +275,8 @@ re-registering, and treat the duplicate error as already-registered.
 :::caution registerTool throws on undefined
 Symptom: `Cannot read properties of undefined`. Cause: no flag, or the page is
 on `http` — WebMCP needs a secure context, and the entry point is simply absent.
-Fix: feature-detect `document.modelContext ?? navigator.modelContext` and bail to
-a banner before you call anything; serve over `https` or `localhost`.
+Fix: feature-detect `document.modelContext` and bail to a banner before you call
+anything; serve over `https` or `localhost`.
 :::
 
 :::caution Your users never see the tools
@@ -299,7 +295,7 @@ loop, keep a fence-stripping parse, and always pass `outputLanguage: 'en'`.
 
 ## Recap
 
-- The entry point is `document.modelContext`, with `navigator.modelContext` as the deprecated fallback — resolve both, feature-detect, bail to a banner.
+- The entry point is `document.modelContext` — feature-detect it, bail to a banner.
 - A tool is a descriptor: `name`, `description`, `inputSchema`, `execute` — and `execute` runs in the page with the user's session and resolves to `Promise<unknown>`.
 - One `AbortController` across the set means one `abort()` unregisters everything; it's portable across Chrome 146–150.
 - The in-page agent is the same intent loop from the tools lesson, dispatching into the same registered `CART_TOOLS` — one definition, two consumers.

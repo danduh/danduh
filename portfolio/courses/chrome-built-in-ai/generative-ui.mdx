@@ -239,11 +239,12 @@ window.addEventListener('message', onFrameMessage);
 ## Drive it from the LanguageModel loop
 
 None of this is new machinery. It's the intent loop from tool calling, with one tool
-that answers in HTML. Create the session the way you always do — `outputLanguage: 'en'`,
-a `responseFormat` schema, a system prompt that lists `renderForm`. Then loop:
-prompt, parse, run the tool, feed the result back. When the tool returns UI, render
-it and hand back `content`. When the user submits, you get a choice — round-trip the
-values back through the model for a confirmation, or skip the model entirely.
+that answers in HTML. Create the session the way you always do — `outputLanguage: 'en'`
+and a system prompt that lists `renderForm`. Then loop: prompt with
+`responseConstraint: INTENT_SCHEMA`, parse, run the tool, feed the result back. When
+the tool returns UI, render it and hand back `content`. When the user submits, you get
+a choice — round-trip the values back through the model for a confirmation, or skip
+the model entirely.
 
 That last option is the one worth stealing. In the shipped code the Pick button
 never wakes the model: it calls `commitRecipeToPlan`, a tool tagged
@@ -255,10 +256,10 @@ plan, no token spent.
 ```js title="demo.js"
 const session = await LanguageModel.create({
   outputLanguage: 'en',                    // load-bearing — don't omit it
-  responseFormat: INTENT_SCHEMA,           // { toolName, args, reply }
   initialPrompts: [{ role: 'system', content: TOOL_SYSTEM }],
 });
 
+// driveLoop prompts each turn with { responseConstraint: INTENT_SCHEMA } — { toolName, args, reply }
 await driveLoop(session, 'Book me a demo slot'); // prompt → parse → run → feed → repeat
 
 // Later, when the iframe posts ui/submit, feed the values back in:
@@ -271,10 +272,10 @@ window.addEventListener('beforeunload', () => session.destroy()); // free the GP
 ```ts title="demo.ts"
 const session = await LanguageModel.create({
   outputLanguage: 'en',
-  responseFormat: INTENT_SCHEMA,
   initialPrompts: [{ role: 'system', content: TOOL_SYSTEM }],
 });
 
+// driveLoop prompts each turn with { responseConstraint: INTENT_SCHEMA }
 await driveLoop(session, 'Book me a demo slot');
 
 async function handleSubmit(values: Record<string, string>): Promise<void> {
@@ -356,7 +357,7 @@ An iframe is cheaper than the incident.
 
 - [An MCP client in the browser](./mcp-client) — the inverse move: drive tools from a remote MCP server, not just local ones.
 - [WebMCP: your page as a tool surface](./webmcp) — how tools get registered on the page in the first place.
-- [Structured output & tool calling](./structured-output-and-tools) — the intent loop and `responseFormat` schema this all rides on.
+- [Structured output & tool calling](./structured-output-and-tools) — the intent loop and `responseConstraint` schema this all rides on.
 - [Generative UI API reference](https://windowai.danduh.me/generative-ui/docs) — the hosted MCP Apps (SEP-1865) walkthrough.
 
 ---

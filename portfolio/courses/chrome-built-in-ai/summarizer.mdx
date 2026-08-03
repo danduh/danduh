@@ -34,7 +34,7 @@ time, and steer its tone with a single line of `sharedContext`.
 - Pick the output shape with `type`, `format`, and `length` — key-points, `tl;dr`, teaser, or headline.
 - Summarize in one call with `summarize()`, or stream deltas with `summarizeStreaming()` and append them.
 - Frame every summary in your domain with `sharedContext`, and refine a single input with per-call `context`.
-- Measure input against `inputQuota`, survive `QuotaExceededError`, and `destroy()` the summarizer on teardown.
+- Survive a `QuotaExceededError` on very long input, and `destroy()` the summarizer on teardown.
 
 :::note Prerequisites
 Desktop Chrome with built-in AI switched on. If `Summarizer` isn't on `self`
@@ -236,47 +236,6 @@ reads the same whether it's compressing a Stripe incident report, a Notion
 meeting note, or a Postgres post-mortem. With it, the output starts sounding like
 it belongs in your product. One string. Load-bearing.
 
-## Mind the input budget
-
-The Summarizer isn't a bucket you can pour a novel into. There's an input quota,
-and a document that blows past it doesn't get politely truncated — it throws.
-Before you feed it something big, measure: `measureInputUsage()` tells you what
-the input costs in tokens, `inputQuota` tells you the ceiling.
-
-<CodeTabs>
-```js title="demo.js"
-const usage = await summarizer.measureInputUsage(article);
-console.log(`${usage} / ${summarizer.inputQuota} input tokens`);
-
-try {
-  const summary = await summarizer.summarize(article);
-} catch (e) {
-  // highlight-next-line
-  if (e.name === 'QuotaExceededError') {
-    // e.requested vs e.quota tells you by how much you overshot.
-    // Split the document, summarize each section, then summarize the summaries.
-  }
-}
-```
-```ts title="demo.ts"
-const usage: number = await summarizer.measureInputUsage(article);
-console.log(`${usage} / ${summarizer.inputQuota} input tokens`);
-
-try {
-  const summary: string = await summarizer.summarize(article);
-} catch (e) {
-  // highlight-next-line
-  if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-    // e.requested vs e.quota tells you by how much you overshot.
-  }
-}
-```
-</CodeTabs>
-
-The fix for a too-big document is the oldest trick in the book: chunk it,
-summarize each chunk, then summarize the chunk-summaries. A summary of summaries.
-Ugly, and it works every time.
-
 ## Destroy the summarizer
 
 A live summarizer pins GPU memory the same way a `LanguageModel` session does,
@@ -341,10 +300,9 @@ values (`'tl;dr'` has a semicolon), and probe a specific config with
 :::
 
 :::caution QuotaExceededError on a long document
-Symptom: `summarize()` rejects with `QuotaExceededError`, carrying `requested`
-and `quota`. Cause: the input is longer than the summarizer's `inputQuota`. Fix:
-call `measureInputUsage()` first, and if it's over the ceiling, split the
-document into sections, summarize each, then summarize the summaries.
+Symptom: `summarize()` rejects with `QuotaExceededError`. Cause: the input is
+longer than the model can take in one pass. Fix: chunk it — split the document
+into sections, summarize each, then summarize the summaries.
 :::
 
 :::caution The streamed summary shows only the last few words
@@ -367,7 +325,6 @@ GPU memory.
 - `type`, `format`, and `length` set the shape — and the TL;DR type is spelled `'tl;dr'`, semicolon and all.
 - `summarize()` returns the whole thing; `summarizeStreaming()` yields deltas you append.
 - `sharedContext` frames every call on the instance; per-call `context` refines a single input.
-- `measureInputUsage()` against `inputQuota` keeps you clear of `QuotaExceededError`; chunk big documents.
 - `destroy()` frees the model, and a destroyed summarizer doesn't come back.
 
 Everyone else is paying a server to shorten a sentence.

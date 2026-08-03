@@ -19,14 +19,14 @@ keywords:
 
 # Evaluation
 
-So. The model sitting on your users' machines is small and non-deterministic — it can be confidently wrong, and the same prompt hands back a different answer on the next run. Which kills the way you're tempted to check it: run once, read the output, nod, ship. This lesson builds the alternative — a golden set, a deterministic score, each case run ten times, and a stability rate — then drives the whole thing against `window.ai` in CI without pretending Gemini Nano fits on a GitHub runner.
+So. The model sitting on your users' machines is small and non-deterministic — it can be confidently wrong, and the same prompt hands back a different answer on the next run. Which kills the way you're tempted to check it: run once, read the output, nod, ship. This lesson builds the alternative — a golden set, a deterministic score, each case run ten times, and a stability rate — then drives the whole thing against the built-in AI globals in CI without pretending Gemini Nano fits on a GitHub runner.
 
 ## What you'll build
 
 - Build a golden set — trusted inputs, each paired with a plain-language rule and a deterministic `check` — starting at 8 to 30 cases.
 - Score outputs two ways: rule-based checks in regular code (the CI-safe core), then LLM-as-judge for the fuzzy stuff, without letting Nano grade itself.
 - Run each case 5 to 10 times and report a stability rate, counting `ERROR` (the harness broke) apart from `FAIL` (the model was wrong).
-- Drive the suite against `window.ai` from CI with a Playwright bridge, split across every PR, nightly, and local so real Nano runs where it actually can.
+- Drive the suite against the built-in AI globals from CI with a Playwright bridge, split across every PR, nightly, and local so real Nano runs where it actually can.
 
 :::note Prerequisites
 Desktop Chrome with built-in AI switched on, and at least one call worth grading. This builds on [the Prompt API](./prompt-api) and pairs with [Observability & tracing](./observability-and-tracing) — once you can see every call, you measure whether it was any good. New here? Start with [Setup & the availability lifecycle](./setup-and-availability), and keep [the compatibility matrix](./shipping-and-compatibility) handy for what's stable where. It assumes you already know the four availability states — it won't re-teach them.
@@ -186,9 +186,9 @@ async function stabilityRate(
 
 The demo runs exactly this: pick a case, run it eight times, and watch the dots land green, red, or grey. Green passed, red failed, grey errored — and grey never touches the percentage. `scored = passed + failed`, and the rate is `passed / scored`. The errors get their own count off to the side, where they belong.
 
-## Run it against window.ai in CI
+## Run it against the built-in AI globals in CI
 
-Here's the catch that surprises everyone the first time. `window.ai` — the whole built-in AI surface — only exists inside a browser tab. It's not in Node. So your test runner can't `import` it, stub a fetch, and call it a day. You drive a real browser instead, and you run the model inside the page.
+Here's the catch that surprises everyone the first time. The built-in AI globals — the whole on-device surface — live only inside a browser tab. Not in Node. So your test runner can't `import` them, stub a fetch, and call it a day. You drive a real browser instead, and you run the model inside the page.
 
 ```js title="eval.bridge.js"
 // Node test → real Chrome via Playwright. Bundled Chromium lacks the model,
@@ -214,7 +214,7 @@ Now the honest part, because the bridge tempts you to run everything everywhere.
 
 | When | What runs | Model |
 |---|---|---|
-| Every PR (hosted runner) | rule-based evals + a mocked `window.ai` | none |
+| Every PR (hosted runner) | rule-based evals + mocked built-in AI globals | none |
 | Nightly (self-hosted, GPU, pre-warmed profile) | real stability-rate evals | real Nano |
 | Local dev | the full suite | real Nano |
 | Judge tier (optional) | fuzzy rubrics (local Ollama / cloud) | non-blocking |
@@ -231,7 +231,7 @@ You don't need much, and you don't need Python. Three options that reach the tab
 - evalite — a Vitest-based eval runner with a dashboard and CI thresholds on top.
 - promptfoo — a custom JS provider shells out to your Playwright bridge; you get assertions and a matrix UI for free.
 
-DeepEval and Ragas are fine tools that live in Python, where `window.ai` doesn't exist and never will. Without a bridge of their own, they can't reach the model. Skip them for on-device browser work.
+DeepEval and Ragas are fine tools that live in Python, where the built-in AI globals don't exist and never will. Without a bridge of their own, they can't reach the model. Skip them for on-device browser work.
 
 :::tip Try it
 Run it locally: open `16-evaluation/index.html` from the [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop Chrome. Or use the hosted demo: **[the mini-eval harness](https://windowai.danduh.me/evaluation)** (with the [API walkthrough](https://windowai.danduh.me/evaluation/docs)).
@@ -253,10 +253,10 @@ Cause: you counted `ERROR` as `FAIL`. Infra problems — a missing API, a reject
 Fix: score `passed / scored` where `scored = passed + failed`, and keep the error count separate. An infra error is not the model being wrong; report it on its own.
 :::
 
-:::caution The eval imports window.ai in Node and everything is undefined
-Symptom: your test runner sees `LanguageModel` and `window.ai` as `undefined`, and every case errors before the model runs.
+:::caution The eval imports the built-in AI globals in Node and everything is undefined
+Symptom: your test runner sees `LanguageModel` and the other globals as `undefined`, and every case errors before the model runs.
 
-Cause: the built-in AI globals only exist inside a browser tab. Node has no `window.ai`, so a plain `import` can't reach it.
+Cause: the built-in AI globals only exist inside a browser tab. Node has none of them, so a plain `import` can't reach them.
 
 Fix: drive a real browser with Playwright — `channel: 'chrome'`, not bundled Chromium — and run the call inside `page.evaluate`, then score the returned string back in Node.
 :::
@@ -283,7 +283,7 @@ Fix: this is the feature, not the bug — it's exactly why you pinned the suite.
 - Score with rule-based checks first: regular code, no model, 100% reproducible, safe to run on every commit. Reach for an LLM-as-judge only for fuzzy criteria.
 - Don't let Nano judge itself, and validate any judge against a human-labelled set before you trust its numbers.
 - Run each case 5 to 10 times for a stability rate, and count `ERROR` apart from `FAIL` so a broken runner can't make a good model look bad.
-- `window.ai` lives only in a tab, so evaluate through a Playwright bridge; split PR, nightly, and local by what real Nano can run, and re-run the suite on every Chrome release.
+- The built-in AI globals live only in a tab, so evaluate through a Playwright bridge; split PR, nightly, and local by what real Nano can run, and re-run the suite on every Chrome release.
 
 Everyone else grades a dice roll on one throw.
 

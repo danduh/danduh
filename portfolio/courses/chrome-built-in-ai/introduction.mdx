@@ -34,7 +34,7 @@ Desktop Chrome (Windows, macOS, or Linux) with built-in AI available. If `availa
 
 ## What "built-in AI" actually means
 
-So what is it. Not a cloud endpoint you hit with a key. Not a wrapper around someone's REST API. Not `window.ai` — that name is dead, forget you ever saw it.
+So what is it. Not a cloud endpoint you hit with a key. Not a wrapper around someone's REST API. Not a model you bundle and ship yourself.
 
 Built-in AI is a language model — Gemini Nano, 2 to 4 billion parameters depending on your hardware — sitting on the user's disk, managed by Chrome, exposed to your page through bare browser globals like `LanguageModel`. You reach for it the way you reach for `fetch` or `localStorage`. The model runs on the user's own GPU. The inference never leaves the tab.
 

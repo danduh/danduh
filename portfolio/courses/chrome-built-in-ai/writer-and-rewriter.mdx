@@ -419,10 +419,9 @@ growing string.
 :::
 
 :::caution QuotaExceededError on a long input
-Symptom: `write()` or `rewrite()` rejects with `QuotaExceededError` carrying
-`requested` and `quota`. Cause: the input is past the instance's `inputQuota`.
-Fix: check `measureInputUsage(text)` against `inputQuota` first, and split
-anything bigger into sections you run one at a time.
+Symptom: `write()` or `rewrite()` rejects with `QuotaExceededError`. Cause: very
+long input can throw — the text is longer than the model takes in one pass. Fix:
+split it into chunks and run them one at a time.
 :::
 
 ## Recap
