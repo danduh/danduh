@@ -289,8 +289,8 @@ window.addEventListener('beforeunload', () => session.destroy());
 :::tip Try it
 Run it locally: open `13-generative-ui/index.html` from the
 [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
-Chrome. Or use the hosted demo: **[Generative UI](https://windowai.danduh.me/generative-ui)**
-(with its [API walkthrough](https://windowai.danduh.me/generative-ui/docs)).
+Chrome. Or use the hosted demo: **[Generative UI](https://windowai.danduh.me/generative-ui/generative-ui-demo)**
+(with its [API walkthrough](https://windowai.danduh.me/generative-ui/generative-ui-api-documentation)).
 
 Expected: you ask the assistant to book a slot; it calls `renderForm`, and a small
 form appears inside a sandboxed iframe. Fill it in and submit — the event log shows
@@ -358,7 +358,7 @@ An iframe is cheaper than the incident.
 - [An MCP client in the browser](./mcp-client) — the inverse move: drive tools from a remote MCP server, not just local ones.
 - [WebMCP: your page as a tool surface](./webmcp) — how tools get registered on the page in the first place.
 - [Structured output & tool calling](./structured-output-and-tools) — the intent loop and `responseConstraint` schema this all rides on.
-- [Generative UI API reference](https://windowai.danduh.me/generative-ui/docs) — the hosted MCP Apps (SEP-1865) walkthrough.
+- [Generative UI API reference](https://windowai.danduh.me/generative-ui/generative-ui-api-documentation) — the hosted MCP Apps (SEP-1865) walkthrough.
 
 ---
 

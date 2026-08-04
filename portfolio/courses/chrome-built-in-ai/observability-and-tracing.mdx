@@ -328,7 +328,7 @@ Everything through Level 2 stays on the device. That's not a nice-to-have — it
 The rule is short. Log sizes and timings, not content. `outChars` and `latencyMs`, yes. The user's actual prompt and the model's actual answer, no — not by default. The moment you add Sentry, Langfuse, or an OTLP collector, spans leave the machine, so make every external sink an explicit opt-in the user or the developer chooses, never the default path. Keep the content local and you keep the promise you shipped on.
 
 :::tip Try it
-Run it locally: open `15-observability-and-tracing/index.html` from the [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop Chrome. Or use the hosted demo: **[on-device trace viewer](https://windowai.danduh.me/observability)** (with the [API walkthrough](https://windowai.danduh.me/observability/docs)).
+Run it locally: open `15-observability-and-tracing/index.html` from the [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop Chrome. Or use the hosted demo: **[on-device trace viewer](https://windowai.danduh.me/observability/observability-demo)** (with the [API walkthrough](https://windowai.danduh.me/observability/observability-api-documentation)).
 
 Expected: you run a traced Summarizer call; the summary streams in, and the same captured span renders three ways side by side — the `console.log` line, the structured `AiSpan` object, and its OpenTelemetry `gen_ai.*` attributes. Switch to the Prompt API to watch `contextUsage` show up.
 
