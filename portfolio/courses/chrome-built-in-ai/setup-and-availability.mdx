@@ -111,7 +111,10 @@ if (typeof LanguageModel === 'undefined') {
   // No built-in AI here — not desktop Chrome, or an http:// page.
 }
 
-const state = await LanguageModel.availability({ outputLanguage: 'en' });
+const state = await LanguageModel.availability({
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+});
 // "unavailable" | "downloadable" | "downloading" | "available"
 console.log(state);
 ```
@@ -119,7 +122,8 @@ console.log(state);
 type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
 
 const state: Availability = await LanguageModel.availability({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
 });
 console.log(state);
 ```
@@ -141,7 +145,8 @@ in current builds, so don't reach for it.
 <CodeTabs>
 ```js title="demo.js"
 const session = await LanguageModel.create({
-  outputLanguage: 'en', // always — this is load-bearing
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   monitor(m) {
     m.addEventListener('downloadprogress', (e) => {
       // highlight-next-line
@@ -155,7 +160,8 @@ const session = await LanguageModel.create({
 ```
 ```ts title="demo.ts"
 const session = await LanguageModel.create({
-  outputLanguage: 'en', // always — this is load-bearing
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   monitor(m: AICreateMonitor) {
     m.addEventListener('downloadprogress', (e: ProgressEvent) => {
       // highlight-next-line
@@ -188,9 +194,10 @@ switch to a desktop" decision. Plan the fallback before you plan the feature.
 Now let's put it together, because the whole lesson collapses into one rule:
 check the state, then act on it. Never assume `available`. Feature-detect the
 global, call `availability()`, branch on the answer, and only create a session
-when the model is actually reachable — passing `outputLanguage: 'en'` when you
-do, then calling `destroy()` the moment you are done so you are not pinning GPU
-memory for a tab nobody is looking at.
+when the model is actually reachable — declaring your languages with
+`expectedInputs` and `expectedOutputs` when you do, then calling `destroy()` the
+moment you are done so you are not pinning GPU memory for a tab nobody is
+looking at.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -199,7 +206,10 @@ async function setupLanguageModel() {
     return degrade('No built-in AI on this browser.');
   }
 
-  const state = await LanguageModel.availability({ outputLanguage: 'en' });
+  const state = await LanguageModel.availability({
+    expectedInputs:  [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+  });
   if (state === 'unavailable') {
     return degrade('This device cannot run Gemini Nano.');
   }
@@ -207,7 +217,8 @@ async function setupLanguageModel() {
   // downloadable / downloading / available all mean create() will work —
   // wire a monitor so the first run shows progress instead of hanging.
   const session = await LanguageModel.create({
-    outputLanguage: 'en',
+    expectedInputs:  [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => {
         statusEl.textContent = `Downloading… ${Math.round(e.loaded * 100)}%`;
@@ -230,14 +241,16 @@ async function setupLanguageModel(): Promise<string> {
   }
 
   const state: Availability = await LanguageModel.availability({
-    outputLanguage: 'en',
+    expectedInputs:  [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
   });
   if (state === 'unavailable') {
     return degrade('This device cannot run Gemini Nano.');
   }
 
   const session = await LanguageModel.create({
-    outputLanguage: 'en',
+    expectedInputs:  [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
     monitor(m: AICreateMonitor) {
       m.addEventListener('downloadprogress', (e: ProgressEvent) => {
         statusEl.textContent = `Downloading… ${Math.round(e.loaded * 100)}%`;

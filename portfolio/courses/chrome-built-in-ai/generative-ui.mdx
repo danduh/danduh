@@ -179,7 +179,7 @@ if (typeof result === 'object') {           // a UI resource, not a plain string
   back = result;
 }
 
-// The invariant, made load-bearing: ui:// must never reach the model.
+// The invariant, enforced in code: ui:// must never reach the model.
 console.assert(!back.includes('ui://'), 'ui:// leaked into the model prompt');
 ```
 ```ts title="demo.ts"
@@ -239,8 +239,8 @@ window.addEventListener('message', onFrameMessage);
 ## Drive it from the LanguageModel loop
 
 None of this is new machinery. It's the intent loop from tool calling, with one tool
-that answers in HTML. Create the session the way you always do — `outputLanguage: 'en'`
-and a system prompt that lists `renderForm`. Then loop: prompt with
+that answers in HTML. Create the session the way you always do — declare its languages
+with `expectedInputs`/`expectedOutputs`, and a system prompt that lists `renderForm`. Then loop: prompt with
 `responseConstraint: INTENT_SCHEMA`, parse, run the tool, feed the result back. When
 the tool returns UI, render it and hand back `content`. When the user submits, you get
 a choice — round-trip the values back through the model for a confirmation, or skip
@@ -255,7 +255,8 @@ plan, no token spent.
 <CodeTabs>
 ```js title="demo.js"
 const session = await LanguageModel.create({
-  outputLanguage: 'en',                    // load-bearing — don't omit it
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: TOOL_SYSTEM }],
 });
 
@@ -271,7 +272,8 @@ window.addEventListener('beforeunload', () => session.destroy()); // free the GP
 ```
 ```ts title="demo.ts"
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: TOOL_SYSTEM }],
 });
 

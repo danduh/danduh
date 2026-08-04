@@ -163,11 +163,12 @@ Registering tools makes them visible to external agents. To let the page's own m
 Same intent loop, same reasons. Create the session with a system prompt that lists the tools, then loop: prompt with a `responseConstraint` schema of `{ toolName, args, reply }`, parse, run the named tool, feed the result back. The one WebMCP-specific line is the coercion — `execute` resolves to `unknown`, and the loop feeds text, so you stringify anything that isn't already a string. The dispatch looks each tool up in the same `CART_TOOLS` array you registered. One definition, two consumers.
 
 <CodeTabs>
-```js title="demo.js" {10-11}
+```js title="demo.js" {11-12}
 // Reuse the intent loop from the tools lesson and dispatch into CART_TOOLS —
 // the exact array registered on document.modelContext above.
 const session = await LanguageModel.create({
-  outputLanguage: 'en', // load-bearing — omit it and JSON comes back fenced
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }], // lists the tools
 });
 
@@ -187,11 +188,12 @@ for (let i = 0; i < 8; i++) {
 
 session.destroy(); // free the model; controller.abort() frees the tools
 ```
-```ts title="demo.ts" {10}
+```ts title="demo.ts" {11}
 type Step = { toolName: string; args?: Record<string, unknown>; reply?: string };
 
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: SYSTEM_PROMPT }],
 });
 
@@ -216,7 +218,7 @@ session.destroy();
 
 Now the part the demo videos skip. WebMCP is not a shipped API. It's a W3C Draft Community Group Report that is still moving, exposed for local dev behind `chrome://flags/#enable-webmcp-testing` and for a deployed origin behind an origin-trial token. Which means: on the machines your actual users run, `document.modelContext` is usually undefined.
 
-So you never make it load-bearing. Feature-detect both surfaces, register the tools when they're there, and keep the page fully usable when they aren't — the cart still adds, removes, and lists whether or not an agent is watching. Build with it to learn where the API is going. Don't bet a product on a draft.
+So you never make it a hard dependency. Feature-detect both surfaces, register the tools when they're there, and keep the page fully usable when they aren't — the cart still adds, removes, and lists whether or not an agent is watching. Build with it to learn where the API is going. Don't bet a product on a draft.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -282,15 +284,15 @@ anything; serve over `https` or `localhost`.
 :::caution Your users never see the tools
 Symptom: it works for you and registers nothing for everyone else. Cause: WebMCP
 is a flag and origin trial, off by default — a draft API, not a shipped one. Fix:
-don't ship it as load-bearing. Register an origin-trial token to light it up on
+don't ship it as a hard dependency. Register an origin-trial token to light it up on
 your origin, and keep the page fully usable without it.
 :::
 
 :::caution The agent answers in prose and never calls a tool
 Symptom: the in-page session replies with text, or returns fenced JSON the loop
 can't parse. Cause: `LanguageModel.create({ tools })` is unreliable on recent
-Canary, and you left `outputLanguage` off. Fix: drive the tools with the intent
-loop, keep a fence-stripping parse, and always pass `outputLanguage: 'en'`.
+Canary — the model narrates instead of emitting a tool call. Fix: drive the tools
+with the intent loop, and keep a fence-stripping parse for the occasional fenced reply.
 :::
 
 ## Recap
@@ -299,7 +301,7 @@ loop, keep a fence-stripping parse, and always pass `outputLanguage: 'en'`.
 - A tool is a descriptor: `name`, `description`, `inputSchema`, `execute` — and `execute` runs in the page with the user's session and resolves to `Promise<unknown>`.
 - One `AbortController` across the set means one `abort()` unregisters everything; it's portable across Chrome 146–150.
 - The in-page agent is the same intent loop from the tools lesson, dispatching into the same registered `CART_TOOLS` — one definition, two consumers.
-- WebMCP is a moving draft behind a flag; gate it, never ship it as load-bearing.
+- WebMCP is a moving draft behind a flag; gate it, never ship it as a hard dependency.
 
 Registering a tool is just handing an agent a function you already wrote and trust. The page is the boundary, the `AbortSignal` is the off switch, and the loop is the tools lesson pointed at your own buttons. The alternative is paying a model by the token to guess where that button is from a screenshot.
 

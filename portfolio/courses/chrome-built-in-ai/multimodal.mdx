@@ -65,7 +65,7 @@ async function getMultimodalAvailability(): Promise<Availability> {
 
 ## Opt into image input at create()
 
-One option turns a text session into a vision session. `expectedInputs` declares that both text and images are coming, and that declaration is what makes the runtime load the vision tower up front. Skip it and the session rejects every image you send it. Keep `outputLanguage: 'en'` on there like everywhere else, and wire a `monitor` — the first multimodal `create()` may pull the model down, and that download blocks the promise until it finishes.
+One option turns a text session into a vision session. `expectedInputs` declares that both text and images are coming, and that declaration is what makes the runtime load the vision tower up front. Skip it and the session rejects every image you send it. The languages ride inside those same declarations — `en` in, `en` out, no extra option needed. Wire a `monitor` — the first multimodal `create()` may pull the model down, and that download blocks the promise until it finishes.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -78,7 +78,6 @@ function getSession() {
     expectedInputs: [{ type: 'text', languages: ['en'] }, { type: 'image' }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
     // highlight-end
-    outputLanguage: 'en',
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => {
         console.log(`Downloading model ${Math.round(e.loaded * 100)}%`);
@@ -99,7 +98,6 @@ function getSession(): Promise<LanguageModel> {
   sessionPromise = LanguageModel.create({
     expectedInputs: [{ type: 'text', languages: ['en'] }, { type: 'image' }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    outputLanguage: 'en',
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => {
         console.log(`Downloading model ${Math.round(e.loaded * 100)}%`);

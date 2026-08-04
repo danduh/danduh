@@ -68,7 +68,7 @@ const APIS = {
 
 // A few APIs want an option to answer precisely; the rest read bare.
 const OPTS = {
-  LanguageModel: { outputLanguage: 'en' },
+  LanguageModel: { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] },
   Translator: { sourceLanguage: 'en', targetLanguage: 'es' },
   Proofreader: { expectedInputLanguages: ['en'] },
 };
@@ -114,7 +114,7 @@ const APIS: Record<string, string> = {
 };
 
 const OPTS: Record<string, Record<string, unknown>> = {
-  LanguageModel: { outputLanguage: 'en' },
+  LanguageModel: { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] },
   Translator: { sourceLanguage: 'en', targetLanguage: 'es' },
   Proofreader: { expectedInputLanguages: ['en'] },
 };
@@ -147,7 +147,7 @@ Built-in AI is an enhancement, not a dependency. Treat it like one you can lose.
 So plan for all four answers up front. No global, or `unavailable`, and you hand off to a cloud API or a reduced feature. `downloadable` or `downloading`, and `create()` blocks on a multi-gigabyte download — wire a `monitor` and show a bar, because a frozen button reads as a broken page. Only `available` lets you go straight through. Never assume you're on that last branch.
 
 <CodeTabs>
-```js title="fallback.js" {5,9,16}
+```js title="fallback.js" {5,9,17}
 // One entry point, every branch handled. Built-in AI wins when it's there;
 // the cloud (or a smaller feature) covers everyone else.
 async function enhance(prompt, { onProgress, cloud }) {
@@ -155,12 +155,13 @@ async function enhance(prompt, { onProgress, cloud }) {
   if (typeof LanguageModel === 'undefined') return cloud(prompt);
 
   // Ask before you create. Never assume 'available'.
-  const state = await LanguageModel.availability({ outputLanguage: 'en' });
+  const state = await LanguageModel.availability({ expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] });
   if (state === 'unavailable') return cloud(prompt);
 
   // 'downloadable' / 'downloading': create() blocks on the model download.
   const session = await LanguageModel.create({
-    outputLanguage: 'en',
+    expectedInputs: [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
     monitor(m) {
       // e.loaded is a 0..1 fraction — there's no e.total.
       m.addEventListener('downloadprogress', (e) => onProgress(e.loaded * 100));
@@ -173,7 +174,7 @@ async function enhance(prompt, { onProgress, cloud }) {
   }
 }
 ```
-```ts title="fallback.ts" {7,10,15}
+```ts title="fallback.ts" {7,10,16}
 interface EnhanceDeps {
   onProgress: (percent: number) => void;
   cloud: (prompt: string) => Promise<string>;
@@ -182,11 +183,12 @@ interface EnhanceDeps {
 async function enhance(prompt: string, { onProgress, cloud }: EnhanceDeps): Promise<string> {
   if (typeof LanguageModel === 'undefined') return cloud(prompt);
 
-  const state = await LanguageModel.availability({ outputLanguage: 'en' });
+  const state = await LanguageModel.availability({ expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] });
   if (state === 'unavailable') return cloud(prompt);
 
   const session = await LanguageModel.create({
-    outputLanguage: 'en',
+    expectedInputs: [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => onProgress(e.loaded * 100));
     },
@@ -209,7 +211,7 @@ Every session, every task instance, every clone is a live claim on GPU memory, a
 `destroy()` when you're done. `destroy()` each clone separately — a clone is a second session that costs exactly what the first one did, and it does not go down with its parent. And wire a teardown for the moment the user leaves, because an SPA route change or a closed tab that skips `destroy()` leaves the model pinned until the process dies.
 
 ```js title="teardown.js"
-const session = await LanguageModel.create({ outputLanguage: 'en' });
+const session = await LanguageModel.create({ expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] });
 const branch = await session.clone(); // a second live session — same GPU cost
 
 // … use them …
@@ -232,7 +234,7 @@ Run this before it goes anywhere near a user. Not a vibe — a list you tick.
 - [ ] For `downloadable` / `downloading`, create with a `monitor` and render `e.loaded * 100` as a progress bar. (`e.loaded` is a 0..1 fraction; there is no `e.total`.)
 - [ ] Have a real fallback for `unavailable` — a cloud API or a reduced feature. Never a blank page.
 - [ ] `destroy()` every session, task instance, and clone, and wire a `beforeunload` teardown.
-- [ ] Pass `outputLanguage: 'en'` to every Prompt API `create()`. It's load-bearing on current Chrome.
+- [ ] Declare `expectedInputs`/`expectedOutputs` (with the languages you use) on every Prompt API `create()`.
 - [ ] Message the limits: desktop-only, secure-context-only, so the visitors who can't run it get a reason instead of a dead button.
 - [ ] Don't ship a flag-only or lapsed-trial API — Writer, Rewriter, Proofreader, Embeddings, WebMCP — to the open web without a fallback or a registered origin-trial token.
 - [ ] Instrument it with [observability & tracing](./observability-and-tracing) and grade it with [evaluation](./evaluation) before you call it done.

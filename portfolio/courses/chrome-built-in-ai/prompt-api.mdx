@@ -28,7 +28,7 @@ turning.
 
 ## What you'll build
 
-- Create a `LanguageModel` session behind an `availability()` gate, always passing `outputLanguage: 'en'`.
+- Create a `LanguageModel` session behind an `availability()` gate, declaring languages with `expectedInputs`/`expectedOutputs`.
 - Steer output with a system prompt and N-shot `initialPrompts`.
 - Stream replies with `promptStreaming()` and append the deltas (never replace).
 - Tune `temperature` and `topK` from `params()`, and fork a session with `clone()`.
@@ -46,9 +46,9 @@ won't re-teach them.
 
 The loop is always the same: ask whether the model is there, create a session,
 use it, tear it down. Feature-detect the global, check `availability()`, then
-`create()` — and pass `outputLanguage: 'en'` every single time. Skip it and
-Chrome still answers, just worse: JSON wrapped in code fences, invented IDs,
-fewer tool calls. It's load-bearing.
+`create()` — declaring the languages you'll use with `expectedInputs` and
+`expectedOutputs`, so the model knows what text is coming in and what to send
+back out.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -61,8 +61,10 @@ const status = await LanguageModel.availability();
 
 if (status !== 'unavailable') {
   const session = await LanguageModel.create({
-    // highlight-next-line
-    outputLanguage: 'en', // always. this is load-bearing.
+    // highlight-start
+    expectedInputs:  [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    // highlight-end
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => {
         // e.loaded is a 0..1 fraction — there is no e.total in current builds
@@ -87,8 +89,10 @@ const status: Availability = await LanguageModel.availability();
 
 if (status !== 'unavailable') {
   const session: LanguageModel = await LanguageModel.create({
-    // highlight-next-line
-    outputLanguage: 'en', // always. this is load-bearing.
+    // highlight-start
+    expectedInputs:  [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    // highlight-end
     monitor(m: AICreateMonitor) {
       m.addEventListener('downloadprogress', (e: ProgressEvent) => {
         console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
@@ -121,7 +125,8 @@ it. That's N-shot prompting, and it's the cheapest steering you'll ever do.
 <CodeTabs>
 ```js title="demo.js"
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [
     // highlight-next-line
     { role: 'system', content: 'You are a concise, friendly assistant.' },
@@ -135,7 +140,8 @@ const reply = await session.prompt('marco');
 ```
 ```ts title="demo.ts"
 const session: LanguageModel = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [
     // highlight-next-line
     { role: 'system', content: 'You are a concise, friendly assistant.' },
@@ -210,7 +216,8 @@ if (typeof LanguageModel.params === 'function') {
 }
 
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   temperature, // undefined falls back to the model default
   topK,
   initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
@@ -228,7 +235,8 @@ if (typeof LanguageModel.params === 'function') {
 }
 
 const session: LanguageModel = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   temperature,
   topK,
   initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
@@ -249,7 +257,8 @@ question" or to keep an undo snapshot before a risky turn.
 <CodeTabs>
 ```js title="demo.js"
 const base = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
 });
 
@@ -266,7 +275,8 @@ branch.destroy();
 ```
 ```ts title="demo.ts"
 const base: LanguageModel = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
 });
 
@@ -303,7 +313,11 @@ try {
   if (e.name === 'QuotaExceededError') {
     // Couldn't evict enough to fit — start fresh (or summarize the history first).
     session.destroy();
-    session = await LanguageModel.create({ outputLanguage: 'en', initialPrompts });
+    session = await LanguageModel.create({
+      expectedInputs:  [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+      initialPrompts,
+    });
   }
 }
 ```
@@ -316,7 +330,11 @@ try {
   // highlight-next-line
   if (e instanceof DOMException && e.name === 'QuotaExceededError') {
     session.destroy();
-    session = await LanguageModel.create({ outputLanguage: 'en', initialPrompts });
+    session = await LanguageModel.create({
+      expectedInputs:  [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+      initialPrompts,
+    });
   }
 }
 ```
@@ -369,21 +387,14 @@ Requires: desktop Chrome with Gemini Nano available — see
 
 ## Gotchas & troubleshooting
 
-Most of these are the same three mistakes wearing different hats: you didn't
-wait for the download, you didn't pass `outputLanguage`, or you treated a
-streaming delta like a snapshot.
+Most of these are the same two mistakes wearing different hats: you didn't
+wait for the download, or you treated a streaming delta like a snapshot.
 
 :::caution create() never resolves
 Symptom: the first `create()` hangs forever with no error. Cause: the multi-GB
 model is downloading and you didn't wire a `monitor`, so there's nothing visible
 to wait on. Fix: always pass `monitor(m)` and read `e.loaded` (a 0..1 fraction)
 for progress. `create()` resolves when the download finishes.
-:::
-
-:::caution Output degrades — fenced JSON, hallucinated detail
-Symptom: replies come wrapped in code fences or full of invented specifics.
-Cause: you omitted `outputLanguage` on `create()`. Fix: always pass
-`outputLanguage: 'en'`. On current Chrome it's load-bearing, not a nicety.
 :::
 
 :::caution The streamed reply shows only the last few characters
@@ -413,7 +424,7 @@ Symptom: `InvalidStateError` on `prompt()`. Cause: you already called
 
 ## Recap
 
-- `availability()` gates `create()`; every `create()` gets `outputLanguage: 'en'`.
+- `availability()` gates `create()`; every `create()` declares languages with `expectedInputs`/`expectedOutputs`.
 - The system prompt lives at `initialPrompts[0]`, exactly once; N-shot examples follow as user/assistant pairs.
 - `promptStreaming()` yields deltas — accumulate them, don't replace.
 - `params()` gives you the `temperature`/`topK` ranges; feature-detect it before you call it.

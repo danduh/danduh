@@ -214,7 +214,8 @@ const INTENT_SCHEMA = {
 
 if ((await LanguageModel.availability()) !== 'available') return;
 const session = await LanguageModel.create({
-  outputLanguage: 'en',            // load-bearing — omit it and the JSON degrades
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }], // lists the server's tools
 });
 
@@ -244,7 +245,8 @@ const INTENT_SCHEMA = {
 
 if ((await LanguageModel.availability()) !== 'available') throw new Error('unavailable');
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }],
 });
 

@@ -88,10 +88,10 @@ flowchart LR
   C --> D["destroy()"]
 ```
 
-Feature-detect first, because the global is simply `undefined` on `http://` pages and on browsers that don't ship it. Then `availability()` returns exactly one of four states: `unavailable`, `downloadable`, `downloading`, or `available`. Then `create()` — always with `outputLanguage: 'en'`, which is load-bearing on current Chrome; drop it and the model starts fencing its JSON and hallucinating more. Then you prompt. Then you `destroy()`, because an orphaned session pins GPU memory until the tab dies.
+Feature-detect first, because the global is simply `undefined` on `http://` pages and on browsers that don't ship it. Then `availability()` returns exactly one of four states: `unavailable`, `downloadable`, `downloading`, or `available`. Then `create()` — declaring the languages you'll use with `expectedInputs` and `expectedOutputs`, so the model knows what's coming in and what goes back out. Then you prompt. Then you `destroy()`, because an orphaned session pins GPU memory until the tab dies.
 
 <CodeTabs>
-```js title="hello.js" {5,9}
+```js title="hello.js" {5,9-12}
 if (typeof LanguageModel === 'undefined') {
   // Not desktop Chrome, or not a secure context (https / localhost).
   console.log('Built-in AI is not available here.');
@@ -100,14 +100,17 @@ if (typeof LanguageModel === 'undefined') {
   // "unavailable" | "downloadable" | "downloading" | "available"
   if (status !== 'unavailable') {
     // First run downloads ~4 GB — wire a monitor in real code (see the demo).
-    const session = await LanguageModel.create({ outputLanguage: 'en' });
+    const session = await LanguageModel.create({
+      expectedInputs:  [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    });
     const reply = await session.prompt('In one word: where does this model run?');
     console.log(reply); // e.g. "Locally."
     session.destroy();
   }
 }
 ```
-```ts title="hello.ts" {6,8}
+```ts title="hello.ts" {6,8-11}
 type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
 
 if (typeof LanguageModel === 'undefined') {
@@ -115,7 +118,10 @@ if (typeof LanguageModel === 'undefined') {
 } else {
   const status: Availability = await LanguageModel.availability();
   if (status !== 'unavailable') {
-    const session = await LanguageModel.create({ outputLanguage: 'en' });
+    const session = await LanguageModel.create({
+      expectedInputs:  [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
+    });
     const reply: string = await session.prompt('In one word: where does this model run?');
     console.log(reply);
     session.destroy();

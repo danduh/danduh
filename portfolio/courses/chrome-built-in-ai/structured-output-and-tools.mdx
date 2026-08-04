@@ -70,7 +70,8 @@ const EXTRACT_SCHEMA = {
 };
 
 const session = await LanguageModel.create({
-  outputLanguage: 'en', // load-bearing: omit it and fenced JSON comes back
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [
     { role: 'system', content: 'You extract structured data from short text. Reply with JSON only.' },
   ],
@@ -113,7 +114,8 @@ const EXTRACT_SCHEMA = {
 } as const;
 
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [
     { role: 'system', content: 'You extract structured data from short text. Reply with JSON only.' },
   ],
@@ -161,7 +163,8 @@ everyone: `execute` returns a `Promise<string>`. Not an object. A string.
 <CodeTabs>
 ```js title="demo.js"
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: 'You are a weather assistant.' }],
   tools: [
     {
@@ -186,7 +189,8 @@ session.destroy();
 ```
 ```ts title="demo.ts"
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: 'You are a weather assistant.' }],
   tools: [
     {
@@ -251,7 +255,8 @@ const system = [
 ].join('\n');
 
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: system }],
 });
 
@@ -296,7 +301,8 @@ const system = [
 ].join('\n');
 
 const session = await LanguageModel.create({
-  outputLanguage: 'en',
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
   initialPrompts: [{ role: 'system', content: system }],
 });
 
@@ -367,12 +373,6 @@ Canary builds. Fix: switch to the intent loop; it needs only `responseConstraint
 Symptom: the model reasons over garbage. Cause: your `execute` returned an object,
 not a string. Fix: return a `Promise<string>` — `JSON.stringify()` the result
 before you return it.
-:::
-
-:::caution Output degrades: more fences, fewer tool calls
-Symptom: JSON arrives fenced more often and the loop stalls. Cause: you left
-`outputLanguage` off `create()`. Fix: always pass `outputLanguage: 'en'`. It's
-load-bearing here, not decoration.
 :::
 
 :::caution create() hangs, or GPU memory runs out
