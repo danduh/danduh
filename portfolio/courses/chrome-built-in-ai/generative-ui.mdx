@@ -264,6 +264,9 @@ A card you can't click is a screenshot. The point of generative UI is that the
 iframe talks back — a form submit, a Pick button, a chosen date — and it reaches the
 host the only way a sandboxed frame can: `postMessage`. Inside the frame that's one
 line on submit, `parent.postMessage({ jsonrpc: '2.0', method: 'ui/submit', params }, '*')`.
+That `ui/submit` is this demo's own message name — the MCP Apps spec defines no such
+method; there the view posts a `tools/call` back to the host. The envelope and the
+source check below are identical either way, so the demo keeps the shorter name.
 
 And here's the trap. A `srcdoc` sandbox has no real origin, so `event.origin` arrives
 as the literal string `"null"` — the origin check every tutorial teaches you is
