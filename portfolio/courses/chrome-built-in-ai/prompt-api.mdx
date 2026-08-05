@@ -1,6 +1,6 @@
 ---
 title: "The Prompt API (LanguageModel)"
-description: "Build an on-device chat with Chrome's Prompt API: create a LanguageModel session, set a system prompt, stream deltas, tune temperature and topK, manage tokens."
+description: "Build an on-device chat with Chrome's Prompt API: create a LanguageModel session, set a system prompt, stream deltas, clone sessions, and manage the token budget."
 sidebar_position: 3
 sidebar_label: Prompt API
 keywords:
@@ -13,7 +13,7 @@ keywords:
 
 <LessonSchema
   name="The Prompt API (LanguageModel)"
-  description="Create a LanguageModel session, set a system prompt, stream deltas, tune temperature and topK, clone sessions, and manage the token budget — on-device."
+  description="Create a LanguageModel session, set a system prompt, stream deltas, clone sessions, and manage the token budget — on-device."
   path="/courses/chrome-built-in-ai/prompt-api"
 />
 
@@ -31,7 +31,7 @@ turning.
 - Create a `LanguageModel` session behind an `availability()` gate, declaring languages with `expectedInputs`/`expectedOutputs`.
 - Steer output with a system prompt and N-shot `initialPrompts`.
 - Stream replies with `promptStreaming()` and append the deltas (never replace).
-- Tune `temperature` and `topK` from `params()`, and fork a session with `clone()`.
+- Tune `temperature` and `topK` from `params()` (Extensions / Origin Trial only), and fork a session with `clone()`.
 - Track `contextUsage` against `contextWindow`, survive context overflow, and `destroy()` on teardown.
 
 :::note Prerequisites
@@ -45,29 +45,41 @@ won't re-teach them.
 ## Create a session
 
 The loop is always the same: ask whether the model is there, create a session,
-use it, tear it down. Feature-detect the global, check `availability()`, then
-`create()` — declaring the languages you'll use with `expectedInputs` and
-`expectedOutputs`, so the model knows what text is coming in and what to send
-back out.
+use it, tear it down. Feature-detect the global, then declare the languages
+you'll use with `expectedInputs` and `expectedOutputs` and pass that *same*
+declaration to both `availability()` and `create()` — `availability()` can only
+answer for the modalities and languages you actually intend to use, so the two
+calls must agree.
 
 <CodeTabs>
 ```js title="demo.js"
 if (typeof LanguageModel === 'undefined') {
-  // No built-in AI on this browser — degrade gracefully (see lesson 2).
+  // No built-in AI on this browser — degrade gracefully (see Setup & availability).
 }
 
-const status = await LanguageModel.availability();
+// Declare the modalities/languages once, then pass the SAME object to
+// availability() and create() — availability() only answers for what you'll use.
+// highlight-start
+const expectations = {
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+// highlight-end
+
+const status = await LanguageModel.availability(expectations);
 // "unavailable" | "downloadable" | "downloading" | "available"
 
-if (status !== 'unavailable') {
+// A user gesture is required to START the download, so kick create() off from a
+// click handler. (Once the model is already downloaded, create() needs no fresh
+// gesture — but gating on the click keeps the first run working too.)
+button.addEventListener('click', async () => {
+  if (status === 'unavailable') return;
+
   const session = await LanguageModel.create({
-    // highlight-start
-    expectedInputs:  [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    // highlight-end
+    ...expectations,
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => {
-        // e.loaded is a 0..1 fraction — there is no e.total in current builds
+        // e.loaded is a 0..1 fraction; e.total exists and is always 1.
         console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
       });
     },
@@ -76,7 +88,7 @@ if (status !== 'unavailable') {
   const reply = await session.prompt('Say hi in one word.');
   console.log(reply);
   session.destroy();
-}
+});
 ```
 ```ts title="demo.ts"
 type Availability =
@@ -85,15 +97,22 @@ type Availability =
   | 'downloading'
   | 'available';
 
-const status: Availability = await LanguageModel.availability();
+// highlight-start
+const expectations = {
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+// highlight-end
 
-if (status !== 'unavailable') {
+const status: Availability = await LanguageModel.availability(expectations);
+
+// A user gesture is required to start the download — create() from a click.
+button.addEventListener('click', async () => {
+  if (status === 'unavailable') return;
+
   const session: LanguageModel = await LanguageModel.create({
-    // highlight-start
-    expectedInputs:  [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    // highlight-end
-    monitor(m: AICreateMonitor) {
+    ...expectations,
+    monitor(m: CreateMonitor) {
       m.addEventListener('downloadprogress', (e: ProgressEvent) => {
         console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
       });
@@ -103,12 +122,13 @@ if (status !== 'unavailable') {
   const reply: string = await session.prompt('Say hi in one word.');
   console.log(reply);
   session.destroy();
-}
+});
 ```
 </CodeTabs>
 
-First `create()` on a fresh machine blocks on a multi-GB download. That's why
-the `monitor` is wired from line one, not bolted on later.
+First `create()` on a fresh machine blocks on a multi-GB download, and the
+download only starts from a user gesture. That's why `create()` lives in a click
+handler, and why the `monitor` is wired from line one, not bolted on later.
 
 ## Set a system prompt and initial (N-shot) prompts
 
@@ -197,54 +217,55 @@ for await (const chunk of stream) {
 
 Two decoding knobs. `temperature` is how much the model gambles — low is
 deterministic and repetitive, high is creative and occasionally unhinged.
-`topK` caps how many candidate tokens it samples from each step. Don't guess the
-ranges, ask for them: `LanguageModel.params()` returns the defaults and the
-ceilings. But feature-detect it first — some builds ship the model without
-shipping `params()`, and calling it blind throws.
+`topK` caps how many candidate tokens it samples from each step.
+
+One catch, and it's a big one: these knobs **only apply to the Prompt API for
+Chrome Extensions, or on the open web with the Origin Trial enabled.** On a plain
+web page they're deprecated — pass them and the runtime logs a warning and
+ignores them, and `LanguageModel.params()` isn't even there. So feature-detect
+`params()`: if it's present you're in a context that honours the knobs and it
+hands you the defaults and ceilings; if it's absent, skip them entirely.
 
 <CodeTabs>
 ```js title="demo.js"
-let temperature;
-let topK;
+const options = {
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
+};
 
 // highlight-next-line
 if (typeof LanguageModel.params === 'function') {
+  // params() only exists for Extensions / the Origin Trial — the only places
+  // temperature/topK actually do anything.
   const params = await LanguageModel.params();
   // { defaultTopK, maxTopK, defaultTemperature, maxTemperature }
-  temperature = params.defaultTemperature;
-  topK = params.defaultTopK;
+  options.temperature = params.defaultTemperature;
+  options.topK = params.defaultTopK;
 }
 
-const session = await LanguageModel.create({
-  expectedInputs:  [{ type: 'text', languages: ['en'] }],
-  expectedOutputs: [{ type: 'text', languages: ['en'] }],
-  temperature, // undefined falls back to the model default
-  topK,
-  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
-});
+const session = await LanguageModel.create(options);
 ```
 ```ts title="demo.ts"
-let temperature: number | undefined;
-let topK: number | undefined;
+const options: LanguageModelCreateOptions = {
+  expectedInputs:  [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }],
+  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
+};
 
 // highlight-next-line
 if (typeof LanguageModel.params === 'function') {
   const params: LanguageModelParams = await LanguageModel.params();
-  temperature = params.defaultTemperature;
-  topK = params.defaultTopK;
+  options.temperature = params.defaultTemperature;
+  options.topK = params.defaultTopK;
 }
 
-const session: LanguageModel = await LanguageModel.create({
-  expectedInputs:  [{ type: 'text', languages: ['en'] }],
-  expectedOutputs: [{ type: 'text', languages: ['en'] }],
-  temperature,
-  topK,
-  initialPrompts: [{ role: 'system', content: 'You are a concise, friendly assistant.' }],
-});
+const session: LanguageModel = await LanguageModel.create(options);
 ```
 </CodeTabs>
 
-These are locked in at `create()`. Want different settings mid-chat? New session.
+Where they apply, these are locked in at `create()`. Want different settings
+mid-chat? New session.
 
 ## Fork a conversation with clone()
 
@@ -295,8 +316,9 @@ branch.destroy();
 
 ## Track tokens, quota, and context overflow
 
-A session has a budget — `contextWindow`, usually around 4096 input tokens — and
-`contextUsage` climbs as the conversation grows. Watch the gap. When a new prompt
+A session has a budget — `contextWindow` input tokens, a fixed ceiling you read
+off the session rather than guess — and `contextUsage` climbs as the
+conversation grows. Watch the gap. When a new prompt
 would blow past the quota, the session quietly evicts your oldest turns to make
 room, one user/assistant pair at a time. The system prompt is never evicted;
 that's the whole reason it's special. And if even that can't free enough room,
@@ -349,7 +371,7 @@ surprised by an overflow.
 A session pins real GPU memory, and Nano isn't small. Leave one hanging and you
 starve every other feature on the page. So call `destroy()` when you're done and
 wire it to teardown, so a closed tab doesn't leak. One catch: a destroyed
-session is gone. Touch it again and you get an `InvalidStateError`.
+session is gone. Touch it again and the call rejects with an `AbortError`.
 
 Recreate. Don't resurrect.
 
@@ -360,14 +382,14 @@ session.destroy();
 // Wire it to teardown so a closed tab doesn't leak GPU memory:
 window.addEventListener('beforeunload', () => session?.destroy());
 
-// Prompting after destroy() throws InvalidStateError — create a new session instead.
+// Prompting after destroy() rejects with AbortError — create a new session instead.
 ```
 ```ts title="demo.ts"
 session.destroy();
 
 window.addEventListener('beforeunload', () => session?.destroy());
 
-// Prompting after destroy() throws InvalidStateError — create a new session instead.
+// Prompting after destroy() rejects with AbortError — create a new session instead.
 ```
 </CodeTabs>
 
@@ -379,7 +401,8 @@ Chrome. Or use the hosted demo:
 [API walkthrough](https://windowai.danduh.me/chat/chat-api-documentation)).
 
 Expected: you type a prompt, the reply streams in a few words at a time, and a
-token readout updates to something like `48 / 4096` after each turn.
+token readout updates after each turn — tokens used out of the session's
+`contextWindow`.
 
 Requires: desktop Chrome with Gemini Nano available — see
 [Setup & the availability lifecycle](./setup-and-availability).
@@ -391,10 +414,13 @@ Most of these are the same two mistakes wearing different hats: you didn't
 wait for the download, or you treated a streaming delta like a snapshot.
 
 :::caution create() never resolves
-Symptom: the first `create()` hangs forever with no error. Cause: the multi-GB
-model is downloading and you didn't wire a `monitor`, so there's nothing visible
-to wait on. Fix: always pass `monitor(m)` and read `e.loaded` (a 0..1 fraction)
-for progress. `create()` resolves when the download finishes.
+Symptom: the first `create()` hangs forever with no error. Cause: two of them.
+Either the multi-GB model is downloading and you didn't wire a `monitor`, so
+there's nothing visible to wait on — or you called `create()` outside a user
+gesture on a `downloadable` model, so the download never even started. Fix: kick
+`create()` off from a click handler (a user gesture is required to start the
+download), always pass `monitor(m)`, and read `e.loaded` (a 0..1 fraction, with
+`e.total` always 1) for progress. `create()` resolves when the download finishes.
 :::
 
 :::caution The streamed reply shows only the last few characters
@@ -417,9 +443,17 @@ destroy and start a fresh session, or run the history through the Summarizer and
 prime a new session with the summary.
 :::
 
-:::caution InvalidStateError when prompting
-Symptom: `InvalidStateError` on `prompt()`. Cause: you already called
-`destroy()` on that session. Fix: sessions don't come back — create a new one.
+:::caution AbortError when prompting
+Symptom: `AbortError` on `prompt()`. Cause: you already called `destroy()` on
+that session. Fix: sessions don't come back — create a new one.
+:::
+
+:::caution create() suddenly throws NotSupportedError
+Symptom: `create()` starts throwing `NotSupportedError` for calls that worked a
+minute ago — even option-less ones — and `availability()` flips to
+`unavailable`. Cause: the on-device model process crashed enough times to trip an
+undocumented cooldown. Fix: stop retrying in a tight loop. Check
+`chrome://crashes`, wait a few minutes — it clears itself.
 :::
 
 ## Recap
@@ -427,7 +461,7 @@ Symptom: `InvalidStateError` on `prompt()`. Cause: you already called
 - `availability()` gates `create()`; every `create()` declares languages with `expectedInputs`/`expectedOutputs`.
 - The system prompt lives at `initialPrompts[0]`, exactly once; N-shot examples follow as user/assistant pairs.
 - `promptStreaming()` yields deltas — accumulate them, don't replace.
-- `params()` gives you the `temperature`/`topK` ranges; feature-detect it before you call it.
+- `params()` gives you the `temperature`/`topK` ranges — Extensions / Origin Trial only; feature-detect it, and on a plain page skip the knobs.
 - `clone()` forks a primed session; `contextUsage`/`contextWindow` track the budget; overflow evicts oldest turns or throws.
 - `destroy()` frees GPU memory, and a destroyed session is done for good.
 

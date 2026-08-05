@@ -68,7 +68,7 @@ interface EvalCase {
   api: EvalApi;
   input: string;
   rule: string;                            // plain language — a human reads this
-  summaryType?: 'tl;dr' | 'key-points' | 'teaser' | 'headline';
+  summaryType?: 'tldr' | 'key-points' | 'teaser' | 'headline';
   // highlight-next-line
   check: (output: string) => CheckResult;  // regular code — no model involved
 }
@@ -122,6 +122,8 @@ Rule-based checks can't score the things you actually care about half the time: 
 
 ```js title="judge.js"
 // Grade ONE answer against a rubric. Not Gemini Nano — a bigger judge.
+// Illustrative pseudocode: `judge` is whatever bigger-model client you wire up
+// (Ollama, a cloud SDK) — `generate` here stands in for its call, not a real API.
 const verdict = await judge.generate({
   system: 'You grade answers PASS or FAIL against the rubric. Reply {"label","rationale"}.',
   rubric: 'The reply is polite and invents no facts.',

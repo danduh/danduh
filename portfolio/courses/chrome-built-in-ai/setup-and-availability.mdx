@@ -35,7 +35,8 @@ check every other API in the course leans on.
 - Probe first and branch on the result, so a machine without the model degrades instead of throwing.
 
 :::note Prerequisites
-Desktop Chrome (Windows, macOS, or Linux) on a machine that can run Gemini Nano.
+Desktop Chrome on Windows 10/11, macOS 13+, Linux, or ChromeOS (Platform
+16389.0.0+) on a Chromebook Plus — a machine that can run Gemini Nano.
 This is the setup lesson, so it does not assume the model is working yet — that
 is the whole point. For the version-by-version picture of what is stable,
 flagged, or desktop-only, keep [the compatibility matrix](./shipping-and-compatibility)
@@ -45,8 +46,9 @@ open in a tab.
 ## Turn on built-in AI
 
 So, the good news first: on current stable Chrome, the core APIs need no flags at
-all. Prompt, Summarizer, Translator, Language Detector — all on by default since
-Chrome 148, with the model downloading the first time you call `create()`. Flags
+all. Summarizer, Translator, and Language Detector went flag-free on the open web
+at Chrome 138; the Prompt API followed at Chrome 148. All of them download the
+model the first time you call `create()`. Flags
 only come back for two reasons: the pre-stable APIs (`Writer`, `Rewriter`,
 `Proofreader`, WebMCP), and bypassing the hardware perf bar on a machine Chrome
 has decided is too weak.
@@ -89,21 +91,26 @@ can be, it is on its way, and yes.
 - `"unavailable"` — the device is under the hardware bar, a flag or setting is off, or you are on `http://`. Treat it as permanent: degrade to a cloud path or a plain message.
 - `"downloadable"` — supported, but the model is not on disk yet. The next `create()` kicks off the download.
 - `"downloading"` — the model is coming down right now. `create()` resolves when it finishes; wire a `monitor` so the user sees progress.
-- `"available"` — on disk and ready. `create()` returns in about 300 ms.
+- `"available"` — on disk and ready. `create()` returns in a fraction of a second.
 
 ```mermaid
 stateDiagram-v2
   unavailable --> downloadable: bar cleared, or flag/setting turned on
   downloadable --> downloading: first create() starts the download
   downloading --> available: download finishes
-  available --> downloadable: auto-purge, under 22 GB free or 30 days idle
+  available --> downloadable: auto-purge, under 10 GB free or 30 days idle
   available --> unavailable: on-device AI switched off in Settings
 ```
 
-One edge surprises everyone: `available` is not forever. Drop under 22 GB of free
-disk, or leave the model untouched for 30 days, and Chrome quietly purges it —
+One edge surprises everyone: `available` is not forever. Let free disk fall under
+10 GB, or leave the model untouched for 30 days, and Chrome quietly purges it —
 the state falls back to `downloadable` and the next `create()` re-downloads. A
 feature that worked in your demo can be back to square one by the next sprint.
+
+Notice the `expectedInputs` / `expectedOutputs` in the calls below. You declare
+the input and output modality plus language up front so `availability()` and
+`create()` can answer for the exact combination you'll actually use — a model
+that can do English text is not the guarantee it can do, say, audio in.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -132,15 +139,15 @@ console.log(state);
 ## Wait out the download with monitor()
 
 Here's the thing about the first `create()` on a fresh machine: it blocks. Not
-for 300 milliseconds — for however long it takes to pull a few gigabytes over the
+for a few hundred milliseconds — for however long it takes to pull a few gigabytes over the
 user's connection, and it will not resolve until that finishes. Fire it with no
 feedback and your UI looks frozen, users refresh mid-download, and you get a bug
 report titled "AI button does nothing."
 
 So wire the `monitor` from the first line, not as a follow-up. Pass a
 `monitor(m)` to `create()`, listen for `downloadprogress`, and read `e.loaded` —
-a fraction from 0 to 1. Multiply by 100 for a percentage. There is no `e.total`
-in current builds, so don't reach for it.
+a fraction from 0 to 1. Multiply by 100 for a percentage. `e.total` exists too,
+but it is always 1, so `e.loaded` is already the fraction you want.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -150,7 +157,7 @@ const session = await LanguageModel.create({
   monitor(m) {
     m.addEventListener('downloadprogress', (e) => {
       // highlight-next-line
-      const pct = Math.round(e.loaded * 100); // e.loaded is 0..1, no e.total
+      const pct = Math.round(e.loaded * 100); // e.loaded is 0..1 (e.total is always 1)
       progressEl.value = e.loaded;
       statusEl.textContent = `Downloading Gemini Nano… ${pct}%`;
     });
@@ -162,10 +169,10 @@ const session = await LanguageModel.create({
 const session = await LanguageModel.create({
   expectedInputs:  [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
-  monitor(m: AICreateMonitor) {
+  monitor(m: CreateMonitor) {
     m.addEventListener('downloadprogress', (e: ProgressEvent) => {
       // highlight-next-line
-      const pct = Math.round(e.loaded * 100); // e.loaded is 0..1, no e.total
+      const pct = Math.round(e.loaded * 100); // e.loaded is 0..1 (e.total is always 1)
       progressEl.value = e.loaded;
       statusEl.textContent = `Downloading Gemini Nano… ${pct}%`;
     });
@@ -179,9 +186,9 @@ const session = await LanguageModel.create({
 Let's be honest about who this actually runs for. Built-in AI is desktop-only and
 hardware-gated, and no amount of clever code changes that. The bar, as it stands:
 
-- Desktop only: Windows 10 or newer, macOS 13 or newer, or Linux. No Android, no iOS, no ChromeOS.
-- Around 22 GB of free disk. Drop under that and Chrome purges the roughly 4 GB model — the auto-purge edge from the diagram above.
-- A GPU with over 4 GB of VRAM, or a machine on the 16 GB-RAM tier.
+- Desktop only: Windows 10 or 11, macOS 13 or newer, Linux, or ChromeOS (Platform 16389.0.0+) on a Chromebook Plus. No Android, no iOS.
+- Around 22 GB of free disk to *start* the download. Chrome then purges the roughly 4 GB model if free space later drops under 10 GB — the auto-purge edge from the diagram above.
+- A GPU with over 4 GB of VRAM — or the CPU path, which needs 16 GB of RAM *and* 4-plus CPU cores. It can run CPU-only; it is not GPU-only.
 - A non-metered network connection for the one-time download.
 - A secure context — `https` or `localhost`. On `http://` the globals are simply `undefined`.
 
@@ -214,8 +221,10 @@ async function setupLanguageModel() {
     return degrade('This device cannot run Gemini Nano.');
   }
 
-  // downloadable / downloading / available all mean create() will work —
-  // wire a monitor so the first run shows progress instead of hanging.
+  // downloadable / downloading / available all mean create() can proceed.
+  // But starting the *download* needs a user gesture — call this from a click
+  // handler, not on load — and wire a monitor so the first run shows progress
+  // instead of hanging. (Once the model is on disk, create() needs no gesture.)
   const session = await LanguageModel.create({
     expectedInputs:  [{ type: 'text', languages: ['en'] }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
@@ -251,7 +260,7 @@ async function setupLanguageModel(): Promise<string> {
   const session = await LanguageModel.create({
     expectedInputs:  [{ type: 'text', languages: ['en'] }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
-    monitor(m: AICreateMonitor) {
+    monitor(m: CreateMonitor) {
       m.addEventListener('downloadprogress', (e: ProgressEvent) => {
         statusEl.textContent = `Downloading… ${Math.round(e.loaded * 100)}%`;
       });
@@ -304,7 +313,8 @@ Fix: always pass `monitor(m)` and read `e.loaded` (a 0..1 fraction) for progress
 Symptom: your percentage is wildly wrong.
 
 Cause: you treated `e.loaded` as a byte count or an already-scaled percentage. It
-is a fraction from 0 to 1, and there is no `e.total` in current builds.
+is a fraction from 0 to 1 — and `e.total` is always 1, so it won't rescale it for
+you.
 
 Fix: render `Math.round(e.loaded * 100)` for the number, and feed `e.loaded`
 straight into a `<progress max="1">`.
@@ -317,14 +327,15 @@ Cause: the device is under the hardware bar, on-device AI is switched off in
 Settings → System, an enterprise policy blocks it, or the page is on `http://`.
 
 Fix: this is not a bug you code around — degrade with a message and a cloud
-fallback. And do not poll `availability()` in a loop hoping it flips; a probe can
-itself trigger a download.
+fallback. And do not poll `availability()` in a loop hoping it flips. It is
+read-only — it never starts a download — so a tight loop just burns cycles and
+changes nothing; only `create()` moves the state forward.
 :::
 
 :::caution It worked last month, now it is downloadable again
 Symptom: a feature that shipped fine is suddenly re-downloading the model.
 
-Cause: Chrome auto-purged Gemini Nano — the disk dropped under 22 GB free, or no
+Cause: Chrome auto-purged Gemini Nano — free disk dropped under 10 GB, or no
 API touched the model for 30 days.
 
 Fix: expect it. Keep the `monitor` and the download UI wired permanently, not

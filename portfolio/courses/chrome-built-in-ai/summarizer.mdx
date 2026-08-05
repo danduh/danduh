@@ -23,7 +23,7 @@ keywords:
 So. The Summarizer API is the one you reach for when the job is dead simple:
 long text in, short text out. You could ask the raw Prompt API to "summarize
 this in three bullets" and hope it holds the shape — but this is the same Gemini
-Nano wearing a tuned system prompt and a decoder config pointed at exactly that
+Nano running a task-specific LoRA adapter and a decoder config pointed at exactly that
 one task, so it holds. Key points, a TL;DR, a headline, a teaser. By the end of
 this page you'll gate it on `availability()`, stream a summary a few words at a
 time, and steer its tone with a single line of `sharedContext`.
@@ -31,7 +31,7 @@ time, and steer its tone with a single line of `sharedContext`.
 ## What you'll build
 
 - Gate `Summarizer.create()` behind an `availability()` check and a download `monitor`.
-- Pick the output shape with `type`, `format`, and `length` — key-points, `tl;dr`, teaser, or headline.
+- Pick the output shape with `type`, `format`, and `length` — key-points, `tldr`, teaser, or headline.
 - Summarize in one call with `summarize()`, or stream deltas with `summarizeStreaming()` and append them.
 - Frame every summary in your domain with `sharedContext`, and refine a single input with per-call `context`.
 - Survive a `QuotaExceededError` on very long input, and `destroy()` the summarizer on teardown.
@@ -63,14 +63,16 @@ if (typeof Summarizer === 'undefined') {
 const status = await Summarizer.availability();
 // "unavailable" | "downloadable" | "downloading" | "available"
 
+// Starting the model download needs a user gesture, so run create() from a click
+// handler (or guard on navigator.userActivation.isActive when it's downloadable).
 if (status !== 'unavailable') {
   const summarizer = await Summarizer.create({
-    type: 'key-points',   // 'key-points' | 'tl;dr' | 'teaser' | 'headline'
+    type: 'key-points',   // 'key-points' | 'tldr' | 'teaser' | 'headline'
     format: 'markdown',   // 'markdown' | 'plain-text'
     length: 'medium',     // 'short' | 'medium' | 'long'
     monitor(m) {
       m.addEventListener('downloadprogress', (e) => {
-        // e.loaded is a 0..1 fraction — there is no e.total in current builds
+        // e.loaded is a 0..1 fraction; e.total exists and is always 1.
         console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
       });
     },
@@ -91,7 +93,7 @@ if (status !== 'unavailable') {
     type: 'key-points',
     format: 'markdown',
     length: 'medium',
-    monitor(m: AICreateMonitor) {
+    monitor(m: CreateMonitor) {
       m.addEventListener('downloadprogress', (e: ProgressEvent) => {
         console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
       });
@@ -117,14 +119,14 @@ the text is going.
 | `type` | What you get |
 |---|---|
 | `key-points` | A bulleted list of the main claims. The default, and the one you'll reach for most. |
-| `tl;dr` | A sentence or two — the classic above-the-fold summary. |
+| `tldr` | A sentence or two — the classic above-the-fold summary. |
 | `teaser` | A hook that makes someone want to read the full thing. |
 | `headline` | One line, news-desk cadence. |
 
-Here's the one that trips people: the TL;DR type is spelled `'tl;dr'`, with the
-semicolon. Not `'tldr'`, not `'tl-dr'`. Type it wrong and `create()` rejects
-with a `NotSupportedError` before you ever see a summary. Copy it from the docs,
-not from memory.
+Here's the one that trips people: the TL;DR type is spelled `'tldr'` — no
+semicolon. Not `'tl;dr'`, not `'tl-dr'`. Write the semicolon and `create()`
+throws a `TypeError` — `'tl;dr'` is not a valid `SummarizerType` — before you
+ever see a summary. Copy it from the docs, not from memory.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -132,7 +134,7 @@ not from memory.
 const headliner = await Summarizer.create({ type: 'headline', length: 'short' });
 
 // highlight-next-line
-const tldr = await Summarizer.create({ type: 'tl;dr', length: 'short' }); // mind the semicolon
+const tldr = await Summarizer.create({ type: 'tldr', length: 'short' }); // no semicolon
 
 // Roomy key-points for a docs page:
 const notes = await Summarizer.create({
@@ -143,13 +145,13 @@ const notes = await Summarizer.create({
 ```
 ```ts title="demo.ts"
 // The valid values, as unions:
-type SummaryType = 'key-points' | 'tl;dr' | 'teaser' | 'headline';
+type SummaryType = 'key-points' | 'tldr' | 'teaser' | 'headline';
 type SummaryLength = 'short' | 'medium' | 'long';
 
 const headliner = await Summarizer.create({ type: 'headline', length: 'short' });
 
 // highlight-next-line
-const tldr = await Summarizer.create({ type: 'tl;dr', length: 'short' }); // mind the semicolon
+const tldr = await Summarizer.create({ type: 'tldr', length: 'short' }); // no semicolon
 
 const notes = await Summarizer.create({
   type: 'key-points',
@@ -158,6 +160,14 @@ const notes = await Summarizer.create({
 });
 ```
 </CodeTabs>
+
+Four more knobs ride on `create()` when you need them: a `preference` performance
+hint (`'auto' | 'speed' | 'capability'`), plus the language tags
+`expectedInputLanguages`, `expectedContextLanguages`, and `outputLanguage` —
+BCP-47 codes that tell the model what's coming in and what you want back. Ask for
+a language combo the build can't serve and `create()` rejects with a
+`NotSupportedError`. Whatever you pass here, pass the same to `availability()` so
+the check matches what you'll actually create.
 
 ## Summarize once, or stream the deltas
 
@@ -252,14 +262,14 @@ summarizer.destroy();
 // Wire it to teardown so a closed tab doesn't leak GPU memory:
 window.addEventListener('beforeunload', () => summarizer?.destroy());
 
-// Summarizing after destroy() throws InvalidStateError — create a new one instead.
+// Summarizing after destroy() throws AbortError — create a new one instead.
 ```
 ```ts title="demo.ts"
 summarizer.destroy();
 
 window.addEventListener('beforeunload', () => summarizer?.destroy());
 
-// Summarizing after destroy() throws InvalidStateError — create a new one instead.
+// Summarizing after destroy() throws AbortError — create a new one instead.
 ```
 </CodeTabs>
 
@@ -291,12 +301,20 @@ pass `monitor(m)` and read `e.loaded` (a 0..1 fraction) for progress. `create()`
 resolves when the download finishes.
 :::
 
-:::caution create() throws NotSupportedError
-Symptom: `create()` rejects before you hold a summarizer. Cause: an unsupported
-option — usually `type: 'tldr'` instead of `'tl;dr'`, or a
-`type`/`format`/`length` combo the build can't serve. Fix: use the exact enum
-values (`'tl;dr'` has a semicolon), and probe a specific config with
-`availability({ type, format, length })` before you commit to it.
+:::caution create() throws a TypeError
+Symptom: `create()` throws before you hold a summarizer. Cause: an invalid enum
+value — usually `type: 'tl;dr'` (with the semicolon) instead of `'tldr'`. Fix:
+use the exact enum values — `'tldr'` has no semicolon — and copy them from the
+docs, not from memory.
+:::
+
+:::caution create() rejects with NotSupportedError
+Symptom: `create()` rejects with `NotSupportedError`. Cause: a language combo the
+build can't serve — an `expectedInputLanguages` / `expectedContextLanguages` /
+`outputLanguage` tag it doesn't support. (A device that can't run built-in AI at
+all reports `availability() === 'unavailable'`, not this.) Fix: probe the exact
+config with `availability({ type, format, length, expectedInputLanguages })`
+before you commit to it, and pass `availability()` the same options as `create()`.
 :::
 
 :::caution QuotaExceededError on a long document
@@ -312,17 +330,16 @@ summary so far. Fix: accumulate — `text += chunk` — then render the running
 `text`.
 :::
 
-:::caution InvalidStateError when you summarize
-Symptom: `summarize()` throws `InvalidStateError`. Cause: you already called
-`destroy()` on that summarizer. Fix: a destroyed summarizer is gone — create a
-new one. And always `destroy()` on teardown so orphaned instances don't exhaust
-GPU memory.
+:::caution AbortError when you summarize
+Symptom: `summarize()` throws `AbortError`. Cause: you already called `destroy()`
+on that summarizer. Fix: a destroyed summarizer is gone — create a new one. And
+always `destroy()` on teardown so orphaned instances don't exhaust GPU memory.
 :::
 
 ## Recap
 
 - `Summarizer.availability()` gates `create()`; wire a `monitor` for the first-run download.
-- `type`, `format`, and `length` set the shape — and the TL;DR type is spelled `'tl;dr'`, semicolon and all.
+- `type`, `format`, and `length` set the shape — and the TL;DR type is spelled `'tldr'`, no semicolon.
 - `summarize()` returns the whole thing; `summarizeStreaming()` yields deltas you append.
 - `sharedContext` frames every call on the instance; per-call `context` refines a single input.
 - `destroy()` frees the model, and a destroyed summarizer doesn't come back.

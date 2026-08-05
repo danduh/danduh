@@ -29,78 +29,77 @@ semantic search that never leaves the tab.
 
 ## What you'll build
 
-- Gate `SemanticEmbedder.create()` behind an `availability()` check, and poll for the model instead of wiring a progress monitor — there isn't one yet.
+- Gate `SemanticEmbedder.create()` behind an `availability()` check, and wire its download monitor for a real progress bar.
 - Embed one string or a whole batch with `embed()`, and read back `Float32Array` vectors in positional order.
 - Pick the right `taskType` on `embed()`, and use the `retrieval-query` / `retrieval-document` asymmetry for search.
 - Compare two vectors with a short cosine-similarity function, in plain JavaScript.
-- Build a semantic search — embed the docs once, embed the query, rank by cosine — and `destroy()` the session on teardown.
+- Build a semantic search — index the docs once, embed only the query per search, reuse one session — and `destroy()` on teardown.
 
 :::note Prerequisites
 Desktop Chrome with built-in AI, plus a caveat the other lessons don't carry:
-this API is bleeding-edge. `SemanticEmbedder` ships in the Early Preview Program
-on Chrome Canary 152, behind the `#semantic-embedder-api` flag. On stable Chrome,
-`availability()` returns `unavailable` — that's expected here, not a bug. If the
+this API is bleeding-edge. `SemanticEmbedder` is an experimental, Intent-to-Prototype
+API — Chrome Canary only, behind the `chrome://flags/#semantic-embedder-api` flag,
+not approved to ship on stable. On stable Chrome, `availability()` returns
+`unavailable` — that's expected here, not a bug. If the
 availability states are new to you, start with
 [Setup & the availability lifecycle](./setup-and-availability), and keep
 [the compatibility matrix](./shipping-and-compatibility) handy for what's stable
 where. This page assumes you already know the four availability states.
 :::
 
-## Check availability, then wait for the model
+## Check availability, then create with a monitor
 
-Same loop as every API in this course — ask, create, use, tear down — with one
-wrinkle that trips everyone. `SemanticEmbedder` has no download monitor yet.
-None. The other APIs hand you a `monitor` with a `downloadprogress` event; this
-one doesn't, so you don't wire a progress bar — you poll `availability()` until
-it flips to `available`, then create. Call `create()` while the model is still
-`downloadable` or `downloading` and it throws before you ever hold a session.
+Same loop as every API in this course — ask, create, use, tear down. Check
+`availability()` first; if it isn't `unavailable`, call `create()`. And
+`create()` does take options: a `signal` to abort and a `monitor` callback whose
+`downloadprogress` event fires as the model provisions — same monitor shape as the
+other built-in APIs. `e.loaded` is a `0..1` fraction (`e.total` is always `1`), so
+you get a real progress bar, not a spinner. One catch worth naming: starting the
+*download* needs a user gesture, so call `create()` from a click handler the first
+time — once the model is on disk, later `create()` calls don't need a fresh one.
 
 <CodeTabs>
 ```js title="demo.js"
 if (typeof SemanticEmbedder === 'undefined') {
-  // No built-in embedder here — EPP / Canary only. Degrade gracefully (see lesson 2).
+  // No built-in embedder here — Canary + flag only. Degrade gracefully (see lesson 2).
 }
 
 const status = await SemanticEmbedder.availability();
 // "unavailable" | "downloadable" | "downloading" | "available"
+if (status === 'unavailable') throw new Error('SemanticEmbedder unavailable');
 
-// No downloadprogress event yet — poll until the model is ready, THEN create().
-async function waitUntilAvailable() {
-  let state = await SemanticEmbedder.availability();
-  while (state !== 'available') {
-    if (state === 'unavailable') throw new Error('SemanticEmbedder unavailable');
-    await new Promise((r) => setTimeout(r, 1500)); // show a "preparing…" state meanwhile
-    state = await SemanticEmbedder.availability();
-  }
-}
-
-await waitUntilAvailable();
-// highlight-next-line
-const embedder = await SemanticEmbedder.create(); // create() takes NO arguments
+// create() takes { signal, monitor }. Call it from a click so the download can start.
+// highlight-start
+const embedder = await SemanticEmbedder.create({
+  monitor(m) {
+    m.addEventListener('downloadprogress', (e) => {
+      updateBar(e.loaded); // e.loaded is 0..1; e.total is always 1
+    });
+  },
+});
+// highlight-end
 ```
 ```ts title="demo.ts"
 type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
 
 const status: Availability = await SemanticEmbedder.availability();
+if (status === 'unavailable') throw new Error('SemanticEmbedder unavailable');
 
-async function waitUntilAvailable(): Promise<void> {
-  let state: Availability = await SemanticEmbedder.availability();
-  while (state !== 'available') {
-    if (state === 'unavailable') throw new Error('SemanticEmbedder unavailable');
-    await new Promise((r) => setTimeout(r, 1500));
-    state = await SemanticEmbedder.availability();
-  }
-}
-
-await waitUntilAvailable();
-// highlight-next-line
-const embedder = await SemanticEmbedder.create();
+// highlight-start
+const embedder = await SemanticEmbedder.create({
+  monitor(m) {
+    m.addEventListener('downloadprogress', (e) => {
+      updateBar(e.loaded); // 0..1
+    });
+  },
+});
+// highlight-end
 ```
 </CodeTabs>
 
-No monitor, no percentage — just a spinner and a little patience. The upside:
-`embeddinggemma-300m` is roughly 200 MB, a rounding error next to Gemini Nano's
-multi-gig download. It lands once, then it's instant.
+A real percentage, not a spinner. The upside on top: the embedding model is small —
+a couple hundred megabytes, a rounding error next to Gemini Nano's multi-gig
+download. It lands once, then it's instant.
 
 ## Embed a string, then a batch
 
@@ -147,11 +146,12 @@ One session, many calls. Create the embedder once and reuse it across every
 
 ## Match the task type
 
-Here's the part the docs bury: a plain `embed()` quietly underperforms. The
-options object takes a `taskType`, and it tells the model how the text will be
-used so it can shape the vector for that job. Comparing two sentences for
-likeness is not the same job as searching a corpus, and the model shapes the
-numbers differently for each.
+Here's the part the docs bury. The options object takes a `taskType`, and it
+tells the model how the text will be used so it can shape the vector for that job.
+Comparing two sentences for likeness is not the same job as searching a corpus,
+and the model can shape the numbers differently for each. It's strictly an
+optional hint, though — a browser whose model doesn't support the distinction is
+free to ignore it, so treat it as "help when it can," not a guaranteed knob.
 
 | `taskType` | When to use it |
 |---|---|
@@ -163,9 +163,10 @@ numbers differently for each.
 
 Retrieval is the one case where the two sides use different task types on
 purpose. Embed your stored documents with `retrieval-document`, embed the user's
-live query with `retrieval-query`, then compare across. That asymmetric pairing
-beats embedding both sides the same way. For a symmetric "are these two things
-alike" — where neither side is privileged — use `semantic-similarity` on both.
+live query with `retrieval-query`, then compare across. When the model honors the
+hint, that asymmetric pairing does better than embedding both sides the same way.
+For a symmetric "are these two things alike" — where neither side is privileged —
+use `semantic-similarity` on both.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -197,8 +198,8 @@ const { embeddings: [queryVec] } = await embedder.embed(userQuery, { taskType: q
 ```
 </CodeTabs>
 
-Omit `taskType` and the text is embedded as-is, no shaping. It works. It just
-leaves relevance on the table for free.
+Omit `taskType` and the text is embedded with no hint. It works. When the model
+does honor the hint, you're leaving a little relevance on the table for free.
 
 ## Compare with cosine similarity
 
@@ -242,66 +243,79 @@ sorting the results.
 ## Build a semantic search
 
 Put the three pieces together and you get search that matches on meaning, not
-keywords. Embed the documents once with `retrieval-document`. Embed the query
-with `retrieval-query`. Score every document against the query with
-`cosineSimilarity`, sort descending, done. Ask "how long do I have to return
+keywords. Split it the way a real search splits: an **index** step and a **search**
+step. Index once — embed the documents with `retrieval-document` and cache the
+vectors. Then every search embeds only the query with `retrieval-query` and scores
+it against the cached vectors. Same embedder both times — create it once, reuse it,
+don't re-embed the corpus on every keystroke. Ask "how long do I have to return
 something" and the refund line comes back first — even though it never says the
 word "return."
 
 <CodeTabs>
 ```js title="demo.js"
-async function search(query, documents) {
-  await waitUntilAvailable();
-  const embedder = await SemanticEmbedder.create();
-  try {
-    const { embeddings: docVecs } = await embedder.embed(documents, {
-      taskType: 'retrieval-document',
-    });
-    const { embeddings: [queryVec] } = await embedder.embed(query, {
-      taskType: 'retrieval-query',
-    });
+let embedder = null;      // one session, reused across searches
+let docVectors = null;    // the cached index: [{ text, values }]
 
-    return documents
-      .map((text, i) => ({
-        text,
-        score: cosineSimilarity(queryVec.values, docVecs[i].values),
-      }))
-      .sort((a, b) => b.score - a.score);
-  } finally {
-    embedder.destroy(); // free the model even if embed() throws
-  }
+async function ensureEmbedder() {
+  if (!embedder) embedder = await SemanticEmbedder.create({ /* monitor(m){…} */ });
+  return embedder;
+}
+
+// INDEX — embed the corpus once, cache the vectors.
+async function index(documents) {
+  await ensureEmbedder();
+  const { embeddings } = await embedder.embed(documents, {
+    taskType: 'retrieval-document',
+  });
+  docVectors = documents.map((text, i) => ({ text, values: embeddings[i].values }));
+}
+
+// SEARCH — embed ONLY the query, score against the cached index.
+async function search(query) {
+  await ensureEmbedder();
+  const { embeddings: [queryVec] } = await embedder.embed(query, {
+    taskType: 'retrieval-query',
+  });
+  return docVectors
+    .map((d) => ({ text: d.text, score: cosineSimilarity(queryVec.values, d.values) }))
+    .sort((a, b) => b.score - a.score);
 }
 ```
 ```ts title="demo.ts"
 interface Ranked { text: string; score: number; }
+interface DocVector { text: string; values: Float32Array; }
 
-async function search(query: string, documents: string[]): Promise<Ranked[]> {
-  await waitUntilAvailable();
-  const embedder = await SemanticEmbedder.create();
-  try {
-    const { embeddings: docVecs } = await embedder.embed(documents, {
-      taskType: 'retrieval-document',
-    });
-    const { embeddings: [queryVec] } = await embedder.embed(query, {
-      taskType: 'retrieval-query',
-    });
+let embedder: SemanticEmbedderInstance | null = null;
+let docVectors: DocVector[] | null = null;
 
-    return documents
-      .map((text, i) => ({
-        text,
-        score: cosineSimilarity(queryVec.values, docVecs[i].values),
-      }))
-      .sort((a, b) => b.score - a.score);
-  } finally {
-    embedder.destroy();
-  }
+async function ensureEmbedder(): Promise<SemanticEmbedderInstance> {
+  if (!embedder) embedder = await SemanticEmbedder.create({ /* monitor(m){…} */ });
+  return embedder;
+}
+
+async function index(documents: string[]): Promise<void> {
+  await ensureEmbedder();
+  const { embeddings } = await embedder!.embed(documents, {
+    taskType: 'retrieval-document',
+  });
+  docVectors = documents.map((text, i) => ({ text, values: embeddings[i].values }));
+}
+
+async function search(query: string): Promise<Ranked[]> {
+  await ensureEmbedder();
+  const { embeddings: [queryVec] } = await embedder!.embed(query, {
+    taskType: 'retrieval-query',
+  });
+  return docVectors!
+    .map((d) => ({ text: d.text, score: cosineSimilarity(queryVec.values, d.values) }))
+    .sort((a, b) => b.score - a.score);
 }
 ```
 </CodeTabs>
 
 No server took that query. No Pinecone, no Weaviate, no pgvector indexed those
 docs. The index is a `Float32Array`, the query is an angle, and the whole thing
-ran on the user's own GPU with the network graph flat at zero.
+ran on the user's own machine with the network graph flat at zero.
 
 ## Shrink vectors with Matryoshka truncation
 
@@ -372,43 +386,46 @@ Chrome Canary. Or use the hosted demo:
 **[on-device semantic search](https://windowai.danduh.me/embeddings/embeddings-cross-lingual)** (with the
 [API walkthrough](https://windowai.danduh.me/embeddings/embeddings-api-documentation)).
 
-Expected: you edit a short list of documents, type a query, and the documents
-re-rank by cosine similarity — the closest-in-meaning line jumps to the top,
-score and all, with nothing sent over the network.
+Expected: you edit a short list of documents, hit **Index documents**, then type a
+query and **Search**. The documents re-rank by cosine similarity — the
+closest-in-meaning line jumps to the top, score and all, with nothing sent over the
+network. Indexing happens once; each search only embeds the query.
 
-Requires: Chrome 152+ Canary with `#semantic-embedder-api` enabled — see
+Requires: Chrome Canary with `#semantic-embedder-api` enabled — see
 [Setup & the availability lifecycle](./setup-and-availability). On stable Chrome
 you'll see `unavailable`, and the demo says so instead of breaking.
 :::
 
 ## Gotchas & troubleshooting
 
-Most of the pain here is the price of admission: this is an Early Preview API, so
-half the trouble is just getting `availability()` to say anything but
-`unavailable`.
+Most of the pain here is the price of admission: this is an experimental,
+Canary-only API, so half the trouble is just getting `availability()` to say
+anything but `unavailable`.
 
 :::caution availability() returns unavailable for almost everyone
-Symptom: the demo reports `unavailable` on your machine. Cause: this is
-EPP/Canary-only — it isn't on stable Chrome. Fix: use Chrome Canary 152+, set
+Symptom: the demo reports `unavailable` on your machine. Cause: it's Canary-only
+behind a flag — it isn't on stable Chrome. Fix: use Chrome Canary, set
 `#semantic-embedder-api` to Enabled and `#optimization-guide-on-device-model` to
 Enabled BypassPerfRequirement, then relaunch. On stable Chrome, treat
 `unavailable` as the normal path and degrade to a message, not a blank page.
 :::
 
-:::caution create() throws before you hold a session
+:::caution create() rejects with "unable to create a session"
 Symptom: `create()` rejects with "The device is unable to create a session to run
-the model." Cause: you called `create()` while the model was still `downloadable`
-or `downloading`. There's no `downloadprogress` event to wait on here. Fix: poll
-`availability()` until it returns `available`, then `create()` — which takes no
-arguments.
+the model." Cause: usually you called `create()` outside a user gesture while the
+model still had to download — starting the *download* needs a click. Fix: call
+`create()` from a click handler and pass a `monitor` so you can show
+`downloadprogress`; once the model is on disk, later `create()` calls succeed
+without a fresh gesture.
 :::
 
-:::caution The wrong task type tanks your results
-Symptom: search returns weak or random-looking matches. Cause: you embedded both
+:::caution The wrong task type weakens your results
+Symptom: search returns weaker matches than you expected. Cause: you embedded both
 sides the same way, or used `semantic-similarity` for retrieval. Fix:
 `retrieval-document` for the corpus, `retrieval-query` for the query;
 `semantic-similarity` only for symmetric comparisons. Remember `taskType` is an
-option on `embed()`, not on `create()`.
+option on `embed()`, not on `create()` — and it's a hint the model may ignore, so
+it helps when supported, never hurts.
 :::
 
 :::caution QuotaExceededError on a long input
@@ -428,10 +445,10 @@ truncated to the same length.
 
 ## Recap
 
-- `SemanticEmbedder.availability()` gates `create()`; there's no progress monitor yet, so poll until `available`, then `create()` with no arguments.
+- `SemanticEmbedder.availability()` gates `create()`; `create()` takes `{ signal, monitor }`, and the monitor's `downloadprogress` gives you a real progress bar.
 - `embed()` takes a string or an array and returns `{ embeddings: [{ values: Float32Array }] }` in positional order — 768 dims for `embeddinggemma-300m`.
-- `taskType` lives on `embed()`; use `retrieval-document` for the corpus and `retrieval-query` for the query.
-- Cosine similarity is eight lines of plain JavaScript; rank documents by it for semantic search.
+- `taskType` lives on `embed()`; use `retrieval-document` for the corpus and `retrieval-query` for the query — it's an optional hint the model may ignore.
+- Index the corpus once and reuse one session; each search embeds only the query, then ranks by a plain-JS `cosineSimilarity`.
 - Matryoshka truncation shrinks vectors to 512 / 256 / 128 dims — same size on both sides, always.
 - `destroy()` frees the model, and vectors only compare within the same model version.
 

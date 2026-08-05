@@ -1,6 +1,6 @@
 ---
 title: "An MCP client in the browser"
-description: Turn the browser into an MCP client — run the Streamable HTTP handshake, list a remote server's tools, and let the on-device LanguageModel drive them.
+description: Turn the browser into an MCP client — run the modern Streamable HTTP flow, list a remote server's tools, and let the on-device LanguageModel drive them.
 sidebar_position: 14
 sidebar_label: MCP client
 keywords:
@@ -13,7 +13,7 @@ keywords:
 
 <LessonSchema
   name="An MCP client in the browser"
-  description="Turn the browser into an MCP client — run the Streamable HTTP handshake, list a remote server's tools, and let the on-device LanguageModel drive them."
+  description="Turn the browser into an MCP client — run the modern Streamable HTTP flow, list a remote server's tools, and let the on-device LanguageModel drive them."
   path="/courses/chrome-built-in-ai/mcp-client"
 />
 
@@ -28,7 +28,7 @@ no backend of your own in the middle.
 
 ## What you'll build
 
-- Run the MCP `initialize` handshake over Streamable HTTP and read a server's tool catalog with `tools/list`.
+- Run the modern MCP connect flow over Streamable HTTP — `server/discover` for identity, `tools/list` for the tool catalog — with no `initialize` handshake and no session.
 - Call a remote tool with `tools/call` and flatten its content blocks into a plain string.
 - Bridge those remote tools into the `LanguageModel` intent loop so on-device Nano drives them.
 - Get past the browser's CORS wall with a proxy, and send a bearer token without leaking it.
@@ -43,40 +43,66 @@ isn't there yet, start with
 stable on which Chrome, see [the compatibility matrix](./shipping-and-compatibility).
 :::
 
-## Run the handshake over Streamable HTTP
+## Speak the protocol over Streamable HTTP
 
-Let's start on the wire. An MCP client is three JSON-RPC calls in a trench coat:
-`initialize` to shake hands, `tools/list` to ask what the server can do,
-`tools/call` to make it do one. The transport underneath is Streamable HTTP — a
+Let's start on the wire. Modern MCP — revision `2026-07-28` — threw out the
+handshake. No `initialize`, no session to open, no `notifications/initialized`.
+Every request stands on its own: it carries its protocol version in a `_meta`
+field, and over HTTP that same version rides in an `MCP-Protocol-Version` header.
+The server reads each request cold. So the client is really three methods —
+`server/discover` to ask who's there and what it can do, `tools/list` to read the
+menu, `tools/call` to run one. The transport underneath is Streamable HTTP — a
 plain POST to a single endpoint, except the reply can come back as JSON or as a
 Server-Sent Events stream, so you accept both.
 
-One detail the SDKs hide and you can't: after `initialize`, the server hands back
-an `Mcp-Session-Id` response header, and every request after that has to echo it.
-Miss it and the server forgets you between calls. There's also a notification the
-handshake needs — `notifications/initialized`, no id, no reply. Send it, or
-`tools/list` won't answer.
+One detail the SDKs hide and you can't: every request body needs that `_meta`
+block — the protocol version, your `clientInfo`, and a `clientCapabilities`
+object — and over HTTP three mirror headers go with it: `MCP-Protocol-Version`
+(which must match the `_meta` version exactly, or it's a `400`), `Mcp-Method`,
+and `Mcp-Name` on a `tools/call`. Get the version wrong and the server answers
+`400` with an `UnsupportedProtocolVersionError` that lists the versions it does
+speak — pick one and retry. There's no `Mcp-Session-Id` to echo anymore; that was
+the legacy era (`2025-11-25` and earlier). Plenty of servers still live there, so
+a production client tries modern first and falls back to `initialize` — more on
+that below.
 
 <CodeTabs>
 ```js title="demo.js"
-// The browser is the MCP client. One primitive — send(request) — POSTs JSON-RPC
-// 2.0 over Streamable HTTP. Streamable HTTP can answer with JSON or an SSE
-// stream, so ask for both.
+// The browser is the MCP client. Modern MCP has no handshake and no session:
+// every request names its protocol version in a `_meta` block and (over HTTP) in
+// an `MCP-Protocol-Version` header. One primitive — send(request) — POSTs it.
+const PROTOCOL_VERSION = '2026-07-28';
+const CLIENT_INFO = { name: 'browser-mcp-client', version: '0.1.0' };
+
+// The per-request metadata every modern request must carry.
+const withMeta = (params) => ({
+  ...params,
+  _meta: {
+    'io.modelcontextprotocol/protocolVersion': PROTOCOL_VERSION,
+    'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
+    'io.modelcontextprotocol/clientCapabilities': {},
+  },
+});
+
 function makeHttpTransport({ url, token }) {
-  let sessionId = null; // the server hands this back on initialize
   return {
     async send(request) {
+      const p = request.params || {};
+      const name = p.name || p.uri; // params.name / params.uri drive the Mcp-Name mirror
       const headers = {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
+        'MCP-Protocol-Version': PROTOCOL_VERSION, // must match _meta; exact casing
+        'Mcp-Method': request.method,             // mirror header routers can read
       };
-      if (sessionId) headers['Mcp-Session-Id'] = sessionId;
+      if (name) headers['Mcp-Name'] = String(name); // required for tools/call
       if (token) headers.Authorization = 'Bearer ' + token; // optional bearer
       const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(request) });
-      const sid = res.headers.get('Mcp-Session-Id');
-      if (sid) sessionId = sid; // cross-origin, the server must EXPOSE this header
       const text = await res.text();
-      if (!text) return null; // 202 Accepted: a notification, no body
+      // A 400 carrying UnsupportedProtocolVersionError (-32022) lists the versions
+      // the server speaks; pick one and retry (the repo demo does this bump).
+      if (!res.ok && res.status !== 202) throw new Error('HTTP ' + res.status + ': ' + text.slice(0, 200));
+      if (!text) return null; // 202 Accepted: no body
       const ct = res.headers.get('content-type') || '';
       return ct.includes('text/event-stream') ? parseSse(text) : JSON.parse(text);
     },
@@ -84,19 +110,14 @@ function makeHttpTransport({ url, token }) {
 }
 
 let id = 0;
-const rpc = (t, method, params) => t.send({ jsonrpc: '2.0', id: ++id, method, params });
-const notify = (t, method, params) => t.send({ jsonrpc: '2.0', method, params });
+const rpc = (t, method, params) => t.send({ jsonrpc: '2.0', id: ++id, method, params: withMeta(params) });
 
-// initialize -> notifications/initialized -> tools/list.
+// server/discover for identity + capabilities, then tools/list. No handshake.
 async function connectTransport(t) {
-  const init = await rpc(t, 'initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'browser-mcp-client', version: '0.1.0' },
-  });
-  await notify(t, 'notifications/initialized', {}); // completes the handshake
-  const list = await rpc(t, 'tools/list', {});
-  return { server: init.result.serverInfo, tools: list.result.tools }; // [{name, description, inputSchema}]
+  const disc = (await rpc(t, 'server/discover', {})).result || {};
+  const list = (await rpc(t, 'tools/list', {})).result || {};
+  const serverInfo = (disc._meta && disc._meta['io.modelcontextprotocol/serverInfo']) || {};
+  return { server: serverInfo, tools: list.tools }; // [{name, description, inputSchema}]
 }
 
 // Streamable HTTP may stream the reply as SSE; pull the data line and parse it.
@@ -107,23 +128,37 @@ function parseSse(text) {
 }
 ```
 ```ts title="demo.ts"
-interface JsonRpcRequest { jsonrpc: '2.0'; id?: number; method: string; params?: unknown; }
+interface JsonRpcRequest { jsonrpc: '2.0'; id?: number; method: string; params?: any; }
 interface Transport { send(request: JsonRpcRequest): Promise<any>; }
 
+const PROTOCOL_VERSION = '2026-07-28';
+const CLIENT_INFO = { name: 'browser-mcp-client', version: '0.1.0' };
+
+const withMeta = (params: Record<string, unknown>) => ({
+  ...params,
+  _meta: {
+    'io.modelcontextprotocol/protocolVersion': PROTOCOL_VERSION,
+    'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
+    'io.modelcontextprotocol/clientCapabilities': {},
+  },
+});
+
 function makeHttpTransport({ url, token }: { url: string; token?: string }): Transport {
-  let sessionId: string | null = null;
   return {
     async send(request) {
+      const p = request.params || {};
+      const name = p.name || p.uri;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
+        'MCP-Protocol-Version': PROTOCOL_VERSION,
+        'Mcp-Method': request.method,
       };
-      if (sessionId) headers['Mcp-Session-Id'] = sessionId;
+      if (name) headers['Mcp-Name'] = String(name);
       if (token) headers.Authorization = 'Bearer ' + token;
       const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(request) });
-      const sid = res.headers.get('Mcp-Session-Id');
-      if (sid) sessionId = sid;
       const text = await res.text();
+      if (!res.ok && res.status !== 202) throw new Error('HTTP ' + res.status + ': ' + text.slice(0, 200));
       if (!text) return null;
       const ct = res.headers.get('content-type') || '';
       return ct.includes('text/event-stream') ? parseSse(text) : JSON.parse(text);
@@ -132,20 +167,14 @@ function makeHttpTransport({ url, token }: { url: string; token?: string }): Tra
 }
 
 let id = 0;
-const rpc = (t: Transport, method: string, params: unknown) =>
-  t.send({ jsonrpc: '2.0', id: ++id, method, params });
-const notify = (t: Transport, method: string, params: unknown) =>
-  t.send({ jsonrpc: '2.0', method, params });
+const rpc = (t: Transport, method: string, params: Record<string, unknown>) =>
+  t.send({ jsonrpc: '2.0', id: ++id, method, params: withMeta(params) });
 
 async function connectTransport(t: Transport) {
-  const init = await rpc(t, 'initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'browser-mcp-client', version: '0.1.0' },
-  });
-  await notify(t, 'notifications/initialized', {});
-  const list = await rpc(t, 'tools/list', {});
-  return { server: init.result.serverInfo, tools: list.result.tools };
+  const disc = (await rpc(t, 'server/discover', {})).result || {};
+  const list = (await rpc(t, 'tools/list', {})).result || {};
+  const serverInfo = (disc._meta && disc._meta['io.modelcontextprotocol/serverInfo']) || {};
+  return { server: serverInfo, tools: list.tools };
 }
 
 function parseSse(text: string) {
@@ -155,6 +184,16 @@ function parseSse(text: string) {
 }
 ```
 </CodeTabs>
+
+:::note Modern and legacy servers
+`2026-07-28` is a redesign, so the world is split. **Modern** servers (this
+revision and later) read per-request `_meta`; **legacy** servers (`2025-11-25`
+and earlier) still want the `initialize` handshake and a session. The spec's own
+answer is a dual-era client: try a modern request first, and if the reply is a
+`400` that *isn't* a recognized modern error, fall back to `initialize`. The demo
+here speaks modern only — its mock server does too — so the fallback stays a
+description, not code. Real servers are mid-migration; expect to meet both.
+:::
 
 ## Call a remote tool
 
@@ -193,10 +232,16 @@ makes the network call.
 
 Nano never touches the wire. It just points.
 
-Why the loop and not the native `tools` array? Because on the Chrome build this
-was written against, native tool calling dropped calls on the floor, and the loop
-leans only on `responseConstraint`. Same trade you made in the tool-calling lesson —
-reach for the loop when strangers run your code.
+Why the loop and not a native `tools` array? Because there isn't one to reach
+for. Passing a `tools` array to `LanguageModel.create()` isn't a supported
+browser feature — the on-device model exposes no built-in tool-calling path, so
+the intent loop *is* the real pattern: constrain the model to name a tool, run it
+in JavaScript, feed the result back. It leans only on `responseConstraint`, which
+is shipped. Same trade you made in the tool-calling lesson.
+
+One guard in the loop: even with the schema pinning `args` to an object, a small
+model will now and then hand it back as a JSON *string*, so `coerceArgs` re-parses
+that case into an object before the `tools/call`.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -212,10 +257,15 @@ const INTENT_SCHEMA = {
   },
 };
 
-if ((await LanguageModel.availability()) !== 'available') return;
-const session = await LanguageModel.create({
+// Same language options to availability() and create() — availability() answers
+// for the exact request you'll make.
+const langOpts = {
   expectedInputs:  [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+if ((await LanguageModel.availability(langOpts)) !== 'available') return;
+const session = await LanguageModel.create({
+  ...langOpts,
   initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }], // lists the server's tools
 });
 
@@ -243,10 +293,15 @@ const INTENT_SCHEMA = {
   },
 } as const;
 
-if ((await LanguageModel.availability()) !== 'available') throw new Error('unavailable');
-const session = await LanguageModel.create({
+// Same language options to availability() and create() — availability() answers
+// for the exact request you'll make.
+const langOpts = {
   expectedInputs:  [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+if ((await LanguageModel.availability(langOpts)) !== 'available') throw new Error('unavailable');
+const session = await LanguageModel.create({
+  ...langOpts,
   initialPrompts: [{ role: 'system', content: buildSystemPrompt(tools) }],
 });
 
@@ -268,14 +323,19 @@ Ok, the part the demo can't paper over. A desktop MCP client — Claude Desktop,
 IDE, a CLI — talks to servers over stdio or from a trusted process, no browser in
 the way. Yours runs inside a tab, so every call is a cross-origin fetch, which
 means CORS. And here's the uncomfortable truth: most MCP servers in the wild
-assume a native client and send no CORS headers at all, so they fail at
-`initialize` with a bare "Failed to fetch" and no detail, because the browser
+assume a native client and send no CORS headers at all, so they fail at the very
+first request with a bare "Failed to fetch" and no detail, because the browser
 hides cross-origin failures on purpose.
 
-For a real connection the server has to allow your origin, and — the one everyone
-misses — expose the `Mcp-Session-Id` header, or the browser strips the session id
-and every follow-up request drops it. If you don't control the server, you run a
-CORS proxy: a dependency-free relay that sits between the tab and the target,
+For a real connection the server has to allow your origin — and the one that
+bites: the request headers you send (`MCP-Protocol-Version`, `Mcp-Method`,
+`Mcp-Name`, and `Authorization` for a token) aren't CORS-simple, so the browser
+fires a preflight `OPTIONS` first and the server has to name them in
+`Access-Control-Allow-Headers`. Miss that and the real POST never leaves. (A
+legacy, handshake-era server adds one more: it hands back an `Mcp-Session-Id`
+response header the browser only surfaces if it's in
+`Access-Control-Expose-Headers`.) If you don't control the server, you run a CORS
+proxy: a dependency-free relay that sits between the tab and the target,
 server-to-server where CORS doesn't apply, and paints the headers back on the way
 out.
 
@@ -288,20 +348,23 @@ TARGET='https://example.com/mcp' node ./mcp-cors-proxy.mjs
 The bearer token, if the server wants one, rides as
 `Authorization: Bearer <token>` on every request — you saw it in the transport
 above. Keep it in memory, never in `localStorage`, and scope it down. One honest
-gap to know: MCP over Streamable HTTP authorizes the whole session, not each
-`tools/call`, so any tool you enable runs with the same credential. A demo token
-in a browser tab is a demo token. Not your production admin key.
+gap to know: that one token rides every request the same, so any tool you enable
+runs with the same credential — MCP has no per-`tools/call` scope. A demo token in
+a browser tab is a demo token. Not your production admin key.
 
 :::tip Try it
 Run it locally: open `14-mcp-client/index.html` from the
 [chrome-ai-course repo](https://github.com/danduh/chrome-ai-course) in desktop
-Chrome. Or use the hosted demo: **[MCP client demo](https://windowai.danduh.me/mcp-client/mcp-client-demo)**
-(its [API walkthrough](https://windowai.danduh.me/mcp-client/mcp-client-api-documentation) has the full protocol).
+Chrome. It ships an in-page mock MCP server, so it runs offline: Connect lists
+`add`, `multiply`, and `echo`; then asking "What is 21 plus 21, then multiply the
+result by 2?" logs a `tools/call` to `add`, then one to `multiply`, and replies
+84. Switch to "Remote MCP server (URL)" to speak to a real one.
 
-Expected: with the default in-page mock server, Connect lists `add`, `multiply`,
-and `echo`; then asking "What is 21 plus 21, then multiply the result by 2?" logs
-a `tools/call` to `add`, then one to `multiply`, and replies 84. Switch to a
-remote URL to speak to a real server.
+The hosted **[MCP client demo](https://windowai.danduh.me/mcp-client/mcp-client-demo)**
+is the remote-only cut — no in-page mock, just a Server URL and an optional Bearer
+token to point at a live MCP endpoint (its
+[API walkthrough](https://windowai.danduh.me/mcp-client/mcp-client-api-documentation)
+has the full protocol).
 
 Requires: desktop Chrome with Gemini Nano available for the agent step —
 connecting and listing tools works without it. See
@@ -311,19 +374,21 @@ connecting and listing tools works without it. See
 ## Gotchas & troubleshooting
 
 :::caution connect() throws "Failed to fetch" or a TypeError
-Symptom: `initialize` rejects immediately with a network error and no detail.
-Cause: the remote server sent no `Access-Control-Allow-Origin` for your origin, so
-the browser blocked the response before your code ever saw it. Fix: connect to a
-server you control, or route through a CORS proxy that adds the header. The browser
-enforces this — there's no client-side switch to turn it off.
+Symptom: the first request (`server/discover`) rejects immediately with a network
+error and no detail. Cause: the remote server sent no `Access-Control-Allow-Origin`
+for your origin, so the browser blocked the response before your code ever saw it.
+Fix: connect to a server you control, or route through a CORS proxy that adds the
+header. The browser enforces this — there's no client-side switch to turn it off.
 :::
 
-:::caution "Missing session ID" after a clean initialize
-Symptom: `initialize` succeeds but `tools/list` fails complaining about the
-session. Cause: the server sets `Mcp-Session-Id` on initialize but doesn't list it
-in `Access-Control-Expose-Headers`, so the browser reads it as null and later
-requests drop it. Fix: a server-side change to expose the header, or a proxy that
-exposes it for you.
+:::caution The POST never leaves the browser (preflight fails)
+Symptom: a remote connect fails and the network panel shows an `OPTIONS` with no
+matching POST behind it. Cause: the modern request headers
+(`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`) aren't CORS-simple, so the
+browser preflights — and the server didn't list them in
+`Access-Control-Allow-Headers`. Fix: allow those headers (a proxy can). A legacy,
+handshake-era server has the mirror-image problem: it hands back an
+`Mcp-Session-Id` you can't read unless it's in `Access-Control-Expose-Headers`.
 :::
 
 :::caution The token works in curl but not in the tab
@@ -331,8 +396,8 @@ Symptom: the bearer token authorizes fine from the terminal, the browser rejects
 the request. Cause: the server doesn't allow `Authorization` in
 `Access-Control-Allow-Headers`, so the `OPTIONS` preflight fails before the real
 request goes out. Fix: the server has to allow the header (a proxy can reflect it).
-And mind the gap — the session is authorized once, not per call, so every enabled
-tool runs with that one credential.
+And mind the gap — one token rides every request, so every enabled tool runs with
+that one credential.
 :::
 
 :::caution The loop stalls partway through a request
@@ -343,20 +408,22 @@ the cap, add a per-call timeout, and don't wire a known-slow tool into an
 interactive chat.
 :::
 
-:::caution It connected last month, now initialize rejects
-Symptom: a handshake that used to work starts failing. Cause: MCP is a moving
-target — the protocol version and transport have shifted more than once
-(`2024-11-05`, `2025-03-26`, `2025-06-18`), and a server upgrade can drop an old
-client. Fix: send a current `protocolVersion`, read the one the server negotiates
-back, and expect to bump it again.
+:::caution It connected last month, now the server rejects your version
+Symptom: a connection that used to work starts failing at the first request.
+Cause: MCP is a moving target, and `2026-07-28` split the world into eras — a
+server that upgraded may no longer speak the version you send. A modern server
+says so out loud: `400` with an `UnsupportedProtocolVersionError` whose
+`data.supported` lists what it does speak. Fix: pick a version from that list and
+retry; if the reply is a bare `400` with no modern error body, you're talking to a
+legacy server — fall back to `initialize` and speak the older revision.
 :::
 
 ## Recap
 
-- An MCP client is three JSON-RPC calls over Streamable HTTP — `initialize`, `tools/list`, `tools/call` — plus the `notifications/initialized` handshake and the `Mcp-Session-Id` you echo on every request.
+- An MCP client is three JSON-RPC calls over Streamable HTTP — `server/discover`, `tools/list`, `tools/call` — each carrying its protocol version in a `_meta` block and (over HTTP) an `MCP-Protocol-Version` header. Modern MCP (`2026-07-28`) dropped the `initialize` handshake and the session entirely; legacy servers still want both.
 - `tools/call` returns content blocks; flatten them to a string before the model reads them.
 - The bridge to on-device Nano is the same intent loop: a `responseConstraint` schema, the tools in the system prompt, and a capped prompt → parse → call → feed-back cycle.
-- CORS is the wall: the server must allow your origin and expose `Mcp-Session-Id`, or you run a proxy. The bearer token stays in memory and authorizes the whole session, not one call.
+- CORS is the wall: the server must allow your origin and the request headers you send (`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`) in its preflight, or you run a proxy. The bearer token stays in memory and rides every request the same — one credential for every tool, not one per call.
 
 That's the whole stack — a model that never leaves the device, tools on a server
 you didn't build, a loop you can read in one screen. No SDK. No backend. Just a

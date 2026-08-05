@@ -25,27 +25,29 @@ one on is to ship the user's half-finished email to a server that runs a
 spell-checker and bills you per call. The Proofreader API is that same job with
 the server deleted — on-device grammar, spelling, punctuation, and
 capitalization correction, running against a LoRA adapter on top of Gemini Nano.
+(A LoRA adapter is a small fine-tuning layer bolted onto the base model — a few
+extra megabytes that specialize Nano for one task, not a whole second model.)
 The part worth a lesson isn't the fixing; you could nag the Prompt API into
 that. It's that every fix comes back positioned — a `startIndex`, an `endIndex`,
-the replacement, and a `types` array — so you can render inline diffs, hover
-tooltips, or a batch-accept panel without a second model call. By the end you'll
-gate it on `availability()`, open a language-scoped session, and turn one messy
-sentence into a list of highlighted corrections.
+and the replacement — so you can render inline diffs, hover tooltips, or a
+batch-accept panel without a second model call. By the end you'll gate it on
+`availability()`, open a language-scoped session, and turn one messy sentence
+into a list of highlighted corrections.
 
 ## What you'll build
 
 - Gate `Proofreader.create()` behind an `availability({ expectedInputLanguages })` check and a download `monitor`.
-- Open a language-scoped session with `includeCorrectionTypes`, `includeCorrectionExplanations`, and `correctionExplanationLanguage`.
-- Call `proofread()` and read the `ProofreadResult` — a `correctedInput` string plus a `corrections` array.
+- Open a language-scoped session and call `proofread()`.
+- Read the `ProofreadResult` — a `correctedInput` string plus a `corrections` array of positioned edits.
 - Slice each original span out of the input with `startIndex`/`endIndex`, and render a highlighted inline diff.
-- Read the `types` array and `explanation` on each correction, and `destroy()` the session on teardown.
+- `destroy()` the session on teardown so a closed tab doesn't leak the adapter.
 
 :::note Prerequisites
 Desktop Chrome with built-in AI switched on — plus one extra catch for this API.
-The Proofreader is flag-gated (a lapsed origin trial), so on most machines
-`availability()` reports `unavailable` until you enable
-`chrome://flags/#proofreader-api` and restart. If `Proofreader` isn't on `self`
-yet, work through [Setup & the availability lifecycle](./setup-and-availability)
+The Proofreader shipped as an origin trial (Chrome 141–145) and is otherwise
+flag-gated, so on most machines `availability()` reports `unavailable` until you
+enable `chrome://flags/#proofreader-api` and restart. If `Proofreader` isn't on
+`self` yet, work through [Setup & the availability lifecycle](./setup-and-availability)
 first, and keep [the compatibility matrix](./shipping-and-compatibility) handy
 for what's stable where. This page assumes you already know the four
 availability states — it won't re-teach them.
@@ -56,12 +58,13 @@ availability states — it won't re-teach them.
 Same four-step loop as everything else in this course: ask if it's there,
 create it, use it, tear it down. Feature-detect the `Proofreader` global, then
 call `availability()` with the languages you expect to proofread. The Proofreader
-ships adapters for five languages — `en`, `es`, `ja`, `de`, `fr` — and each one
-is a separate download, so the check is per-language, not global.
+ships adapters for a small set of languages — `en`, `es`, and `ja` are the ones
+it accepts today — and each one is a separate download, so the check is
+per-language, not global.
 
 Here's the uncomfortable part: this API is still gated behind a flag. For most
 people the honest answer from `availability()` is `unavailable`, and your job is
-to say so and point them at the flag — not throw into a blank page.
+to say so and point them at the flag — not throw them into a blank page.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -95,26 +98,20 @@ if (status === 'unavailable') {
 
 `create()` opens a session tied to the languages you named. On the first
 `create()` for a language it downloads that LoRA adapter, so wire the `monitor`
-from the start — `e.loaded` is a 0..1 fraction, same as everywhere else in this
-course. Two options do the heavy lifting: `includeCorrectionTypes` fills the
-`types` array on each correction, and `includeCorrectionExplanations` adds a
-plain-language `explanation`. Leave them off and you get corrections with no
-labels and no reasons, which is a worse editor UI for no saving.
-
-`correctionExplanationLanguage` is the sly one — it sets the language of the
-explanation text, independent of the language you're proofreading. Proofread
-Spanish, explain in English.
+from the start — `e.loaded` is a 0..1 fraction (and `e.total` is always 1), same
+as everywhere else in this course. That's the whole options surface for the
+shipped API: the languages you expect and a download monitor. The explainer also
+lists `includeCorrectionTypes`, `includeCorrectionExplanation`, and
+`correctionExplanationLanguage`, but Chrome's current build doesn't implement
+them — passing them does nothing, so leave them off.
 
 <CodeTabs>
 ```js title="demo.js"
 const proofreader = await Proofreader.create({
-  expectedInputLanguages: ['en'],        // 'en' | 'es' | 'ja' | 'de' | 'fr'
-  includeCorrectionTypes: true,          // fill each correction's `types` array
-  includeCorrectionExplanations: true,   // add a human-readable `explanation`
-  correctionExplanationLanguage: 'en',   // explanation language, independent of the input
+  expectedInputLanguages: ['en'],        // 'en' | 'es' | 'ja'
   monitor(m) {
     m.addEventListener('downloadprogress', (e) => {
-      // e.loaded is a 0..1 fraction — there is no e.total in current builds
+      // e.loaded is a 0..1 fraction; e.total is always 1
       console.log(`Downloading adapter… ${Math.round(e.loaded * 100)}%`);
     });
   },
@@ -123,18 +120,12 @@ const proofreader = await Proofreader.create({
 ```ts title="demo.ts"
 interface ProofreaderCreateOptions {
   expectedInputLanguages?: string[];
-  includeCorrectionTypes?: boolean;
-  includeCorrectionExplanations?: boolean;
-  correctionExplanationLanguage?: string;
   signal?: AbortSignal;
-  monitor?: (m: AICreateMonitor) => void;
+  monitor?: (m: CreateMonitor) => void;
 }
 
 const proofreader = await Proofreader.create({
   expectedInputLanguages: ['en'],
-  includeCorrectionTypes: true,
-  includeCorrectionExplanations: true,
-  correctionExplanationLanguage: 'en',
   monitor(m) {
     m.addEventListener('downloadprogress', (e) => {
       console.log(`Downloading adapter… ${Math.round(e.loaded * 100)}%`);
@@ -164,21 +155,15 @@ console.log(result.correctedInput);
 // "I think they're going to a meeting tomorrow."
 
 for (const c of result.corrections) {
-  // c.startIndex, c.endIndex, c.correction, c.types, c.explanation
-  console.log(input.slice(c.startIndex, c.endIndex), '→', c.correction, c.types);
+  // c.startIndex, c.endIndex, c.correction
+  console.log(input.slice(c.startIndex, c.endIndex), '→', c.correction);
 }
 ```
 ```ts title="demo.ts"
-type ProofreaderCorrectionType =
-  | 'spelling' | 'punctuation' | 'capitalization'
-  | 'preposition' | 'missing-words' | 'grammar';
-
 interface ProofreaderCorrection {
   startIndex: number;
   endIndex: number;
   correction: string;
-  types?: ProofreaderCorrectionType[];   // plural — an array, filled by includeCorrectionTypes
-  explanation?: string;
 }
 
 interface ProofreadResult {
@@ -191,23 +176,9 @@ const result: ProofreadResult = await proofreader.proofread(input);
 ```
 </CodeTabs>
 
-The name that trips people is `types`. It's plural, and it's an array — one
-correction can carry `['spelling', 'grammar']` when a single fix repairs both.
-Not `type`. Not a string. Read it as a list.
-
-## Know the correction types
-
-Six values, and a correction reports the ones that apply. This is the label you
-render as a chip next to each suggestion.
-
-| `types` value | What it flags |
-|---|---|
-| `spelling` | A misspelled word. |
-| `punctuation` | Wrong, missing, or extra punctuation. |
-| `capitalization` | A capitalization rule — sentence start, proper nouns, the pronoun "I". |
-| `preposition` | The wrong preposition for the context. |
-| `missing-words` | A word dropped from the original. |
-| `grammar` | Agreement, tense, and the general grammar bucket. |
+Each correction is just three fields: where the mistake starts, where it ends,
+and what to put there. The indices are the whole trick — they let you line the
+fix up against the original text without any alignment math.
 
 ## Slice the original span from the indices
 
@@ -239,7 +210,7 @@ function withOriginals(input: string, corrections: ProofreaderCorrection[]) {
 
 ## Highlight the corrections as a diff
 
-Grammarly, LanguageTool, the red squiggle in your address bar — they all landed
+Grammarly, LanguageTool, the red squiggle under a typo in any text box — they all landed
 on the same UI: mark the mistake in place, show the fix on hover. To build that
 you need positions, which is exactly what this API hands you. Walk the input
 once, emitting the unchanged text between corrections and the changed spans
@@ -257,8 +228,8 @@ function buildSegments(input, corrections) {
     if (cursor < c.startIndex) {
       segments.push({ kind: 'unchanged', text: input.slice(cursor, c.startIndex) });
     }
-    segments.push({ kind: 'removed', text: input.slice(c.startIndex, c.endIndex), types: c.types });
-    segments.push({ kind: 'inserted', text: c.correction, types: c.types });
+    segments.push({ kind: 'removed', text: input.slice(c.startIndex, c.endIndex) });
+    segments.push({ kind: 'inserted', text: c.correction });
     cursor = c.endIndex;
   }
   if (cursor < input.length) {
@@ -271,7 +242,6 @@ function buildSegments(input, corrections) {
 interface DiffSegment {
   kind: 'unchanged' | 'removed' | 'inserted';
   text: string;
-  types?: ProofreaderCorrectionType[];
 }
 
 function buildSegments(input: string, corrections: ProofreaderCorrection[]): DiffSegment[] {
@@ -282,8 +252,8 @@ function buildSegments(input: string, corrections: ProofreaderCorrection[]): Dif
     if (cursor < c.startIndex) {
       segments.push({ kind: 'unchanged', text: input.slice(cursor, c.startIndex) });
     }
-    segments.push({ kind: 'removed', text: input.slice(c.startIndex, c.endIndex), types: c.types });
-    segments.push({ kind: 'inserted', text: c.correction, types: c.types });
+    segments.push({ kind: 'removed', text: input.slice(c.startIndex, c.endIndex) });
+    segments.push({ kind: 'inserted', text: c.correction });
     cursor = c.endIndex;
   }
   if (cursor < input.length) {
@@ -303,7 +273,7 @@ model twice to switch views.
 A live session pins its adapter in GPU memory, and Nano is not small. Hold one
 per language for as long as the editor is open, then let it go on teardown so a
 closed tab doesn't leak. Proofread after `destroy()` and you get an
-`InvalidStateError` — the session is gone, so make a new one.
+`AbortError` — the session is gone, so make a new one.
 
 Free it.
 
@@ -330,8 +300,7 @@ Chrome. Or use the hosted demo:
 
 Expected: you proofread a sentence full of typos and get back the corrected
 text, an inline diff with each fix highlighted, and a list of positioned
-corrections — every one showing its original slice, its `types`, and a short
-explanation.
+corrections — every one showing its original slice and its replacement.
 
 Requires: desktop Chrome with the Proofreader flag enabled
 (`#proofreader-api`) and Gemini Nano available — see
@@ -346,8 +315,9 @@ indices point into the text you sent, not the text you got back.
 
 :::caution availability() is unavailable on every machine you try
 Symptom: `availability()` returns `unavailable` for everyone, so the feature
-never shows. Cause: the Proofreader is flag-gated (a lapsed origin trial) and off
-by default — or the device can't run Gemini Nano at all. Fix: enable
+never shows. Cause: the Proofreader is flag-gated — it shipped as an origin trial
+in Chrome 141–145 and is otherwise off by default — or the device can't run
+Gemini Nano at all. Fix: enable
 `chrome://flags/#proofreader-api` and restart Chrome, and confirm the device
 meets the built-in AI bar from [Setup](./setup-and-availability). Treat
 `unavailable` as the common case and degrade with instructions, not a stack
@@ -371,13 +341,13 @@ and hold onto it until you've rendered.
 
 :::caution NotSupportedError on create() or proofread()
 Symptom: `create()` or `proofread()` rejects with `NotSupportedError`. Cause: a
-language outside the supported set — the Proofreader ships adapters only for
-`en`, `es`, `ja`, `de`, and `fr`. Fix: stick to those five, and open one session
-per language instead of expecting a single session to be multilingual.
+language outside the supported set — Chrome's build accepts `en`, `es`, and `ja`
+today. Fix: stick to those, and open one session per language instead of
+expecting a single session to be multilingual.
 :::
 
-:::caution InvalidStateError after you tear down
-Symptom: `proofread()` throws `InvalidStateError`. Cause: you already called
+:::caution AbortError after you tear down
+Symptom: `proofread()` throws `AbortError`. Cause: you already called
 `destroy()` on that session. Fix: a destroyed session doesn't come back — create
 a new one. And always `destroy()` on teardown so orphaned sessions don't exhaust
 GPU memory.
@@ -386,10 +356,10 @@ GPU memory.
 ## Recap
 
 - `Proofreader.availability({ expectedInputLanguages })` gates `create()` — and stays `unavailable` until `#proofreader-api` is enabled.
-- `create()` opens a language-scoped session; `includeCorrectionTypes` and `includeCorrectionExplanations` fill the `types` array and the `explanation`.
+- `create()` opens a language-scoped session; the shipped options are just `expectedInputLanguages` and a download `monitor`.
 - `proofread()` returns `correctedInput` plus a `corrections` array of positioned edits, with indices into the original input.
 - Slice each original span with `startIndex`/`endIndex`, then walk the input once to render an inline, side-by-side, or listed diff.
-- `types` is a plural array from a fixed set of six; `destroy()` frees the adapter and a destroyed session is gone.
+- Each correction is `startIndex`/`endIndex`/`correction`; `destroy()` frees the adapter and a destroyed session is gone.
 
 Everyone else rents a server to move a comma.
 

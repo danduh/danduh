@@ -1,6 +1,6 @@
 ---
 title: "Structured output & tool calling"
-description: Force Chrome built-in AI to return JSON with responseConstraint, wire functions as tools, and build the intent-loop fallback that keeps tool calling reliable.
+description: Force Chrome built-in AI to return JSON with responseConstraint, then drive real JavaScript functions with the intent loop that makes tool calling work today.
 sidebar_position: 4
 sidebar_label: Structured output & tools
 keywords:
@@ -13,7 +13,7 @@ keywords:
 
 <LessonSchema
   name="Structured output & tool calling"
-  description="Force JSON output with responseConstraint, wire real functions as tools, and build the intent-loop fallback that keeps tool calling reliable."
+  description="Force JSON output with responseConstraint, then drive real JavaScript functions with the intent loop that makes tool calling work today."
   path="/courses/chrome-built-in-ai/structured-output-and-tools"
 />
 
@@ -21,18 +21,18 @@ keywords:
 
 So you asked Gemini Nano for JSON and got back a paragraph, a code fence, and a
 small apology on top. Structured output ends that: you hand the model a JSON
-Schema, Chrome masks every token that would break it, and the reply parses every
-time. This lesson forces valid JSON out of the Prompt API, wires real JavaScript
-functions in as tools, and builds the intent loop that keeps tool calling alive
-when the native path quietly dies.
+Schema as `responseConstraint`, and the runtime constrains the reply to that
+schema — or the call throws, instead of handing you prose to regex. This lesson
+forces valid JSON out of the Prompt API, then drives real JavaScript functions
+with the intent loop — the tool-calling pattern that actually works in the
+browser today.
 
 ## What you'll build
 
 - Constrain a session to a JSON Schema with `responseConstraint` and parse the result safely.
 - Read the four JSON Schema keywords that matter here: `type`, `properties`, `enum`, `required`.
-- Wire a native tool with `create({ tools })` and an `execute` handler that returns a string.
-- Run an intent loop that dispatches to local functions turn by turn when native tools aren't enabled.
-- Choose between the native path and the loop for a given build.
+- Build tool calling out of `responseConstraint`: make the model emit a `{ toolName, args }` intent, then run the function yourself.
+- Run that as an intent loop that dispatches to local functions turn by turn, capped so it can't spin forever.
 
 :::note Prerequisites
 Desktop Chrome with built-in AI, and you've already met the session lifecycle in
@@ -46,12 +46,17 @@ are stable on which Chrome, see [the compatibility matrix](./shipping-and-compat
 Here's the move everyone reaches for first: prompt the model in plain English,
 then parse whatever comes back with a regex you'll be maintaining forever. Don't.
 The reliable move has a name — constrain, don't parse. You pass a JSON Schema as
-`responseConstraint` on the `prompt()` call, and the runtime masks any token that
-would break the schema while it decodes. One catch: the reply is still a string,
-so you `JSON.parse()` it. And you keep a fence guard, because a model that
-promised you clean JSON will occasionally wrap it in a fenced code block anyway.
+`responseConstraint` on the `prompt()` call, and the runtime constrains the reply
+to that schema. The spec is blunt about the deal: the result is a string you can
+hand to `JSON.parse()`, and if the model can't produce something schema-compliant,
+the call throws a `SyntaxError` `DOMException` instead of returning junk. One
+catch: the reply is a string, so you parse it. The fence-stripping guard below is
+belt-and-suspenders — it earns its keep on any `prompt()` you *didn't* constrain,
+where an unconstrained model still likes to wrap JSON in a code fence.
 
-A schema and a parse. That's the whole trick.
+A schema and a parse. That's the whole trick. The schema below leans on four
+JSON Schema keywords — `type`, `properties`, `enum`, `required` — broken down in
+[Read a JSON Schema](#read-a-json-schema) right after.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -151,75 +156,15 @@ here's what each one buys you:
 Add `additionalProperties: false` when you want to forbid stray keys — the intent
 schema two steps down uses exactly that.
 
-## Wire real functions with tools
+## Wire real functions with the intent loop
 
 Structured output is the model talking. Tools are the model doing. A JSON reply
 can't reach your database, hit a pricing endpoint, or read today's weather — a
-tool can, because a tool is just a JavaScript function you hand to `create()`. You
-give it a `name`, a `description` the model reads to decide when to call it, an
-`inputSchema` (JSON Schema again), and an `execute` function. One rule that trips
-everyone: `execute` returns a `Promise<string>`. Not an object. A string.
-
-<CodeTabs>
-```js title="demo.js"
-const session = await LanguageModel.create({
-  expectedInputs:  [{ type: 'text', languages: ['en'] }],
-  expectedOutputs: [{ type: 'text', languages: ['en'] }],
-  initialPrompts: [{ role: 'system', content: 'You are a weather assistant.' }],
-  tools: [
-    {
-      name: 'getWeather',
-      description: 'Get the current weather for a city.',
-      inputSchema: {
-        type: 'object',
-        properties: { city: { type: 'string', description: 'City name' } },
-        required: ['city'],
-      },
-      // execute MUST return a Promise<string>. Stringify objects yourself.
-      async execute({ city }) {
-        return JSON.stringify({ city, tempC: 21, sky: 'clear' });
-      },
-    },
-  ],
-});
-
-// The model decides whether to call getWeather, runs it, folds the result in.
-const reply = await session.prompt('Do I need a jacket in Tel Aviv?');
-session.destroy();
-```
-```ts title="demo.ts"
-const session = await LanguageModel.create({
-  expectedInputs:  [{ type: 'text', languages: ['en'] }],
-  expectedOutputs: [{ type: 'text', languages: ['en'] }],
-  initialPrompts: [{ role: 'system', content: 'You are a weather assistant.' }],
-  tools: [
-    {
-      name: 'getWeather',
-      description: 'Get the current weather for a city.',
-      inputSchema: {
-        type: 'object',
-        properties: { city: { type: 'string', description: 'City name' } },
-        required: ['city'],
-      },
-      async execute({ city }: { city: string }): Promise<string> {
-        return JSON.stringify({ city, tempC: 21, sky: 'clear' });
-      },
-    },
-  ],
-});
-
-const reply: string = await session.prompt('Do I need a jacket in Tel Aviv?');
-session.destroy();
-```
-</CodeTabs>
-
-## Run the intent loop when native tools break
-
-Now the part the docs skip. That clean `tools` array is lovely when it works, and
-on recent Canary builds it often doesn't — you wire everything up correctly, call
-`prompt()`, and Chrome answers with `Tool use feature not enabled` or just never
-touches your function. So you stop trusting the feature and lean on the one thing
-that's rock solid: `responseConstraint`.
+function can. The Prompt API explainer sketches a `tools` option on `create()`
+for exactly this, but Chrome hasn't wired it up on-device: pass it and the model
+either ignores your function or the on-device process falls over. So you don't
+wait on it. You build tool calling out of the one thing that's already rock
+solid — `responseConstraint` — and run the functions yourself.
 
 The trick is to make the model emit its intent as JSON and run the tools yourself.
 One schema — `{ toolName, args, reply }`, with `toolName` required. A system prompt
@@ -254,9 +199,17 @@ const system = [
   'Call one tool per turn. When you can answer, emit { "toolName": "done", "reply": "..." }.',
 ].join('\n');
 
-const session = await LanguageModel.create({
+// Gate before create(): availability() is read-only and never downloads; create()
+// is what pulls the model — and starting that download needs a user gesture, so run
+// this from a click handler. Pass the SAME options to availability() and create().
+const opts = {
   expectedInputs:  [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+if ((await LanguageModel.availability(opts)) === 'unavailable') return;
+
+const session = await LanguageModel.create({
+  ...opts,
   initialPrompts: [{ role: 'system', content: system }],
 });
 
@@ -300,9 +253,17 @@ const system = [
   'Call one tool per turn. When you can answer, emit { "toolName": "done", "reply": "..." }.',
 ].join('\n');
 
-const session = await LanguageModel.create({
+// Gate before create(): availability() is read-only and never downloads; create()
+// is what pulls the model — and starting that download needs a user gesture, so run
+// this from a click handler. Pass the SAME options to availability() and create().
+const opts = {
   expectedInputs:  [{ type: 'text', languages: ['en'] }],
   expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+if ((await LanguageModel.availability(opts)) === 'unavailable') throw new Error('unavailable');
+
+const session = await LanguageModel.create({
+  ...opts,
   initialPrompts: [{ role: 'system', content: system }],
 });
 
@@ -323,21 +284,16 @@ session.destroy();
 ```
 </CodeTabs>
 
-## Choose native or the loop
+## Why the loop, and not native tools
 
-So which one do you ship? Depends on who runs your code. If you control the
-browser — a demo, an internal tool, your own Canary — native `tools` is less code
-and reads cleaner. If strangers run it on whatever Chrome they happen to have, the
-loop is the safe bet, because it leans only on `responseConstraint`. Same model,
-same JSON Schema muscle — the loop just moves the dispatch into a `for` loop you
-can watch.
-
-| You want | Reach for |
-|---|---|
-| Least code, and tool calling works on your build | native `tools` |
-| Shipping to users on mixed Chrome versions | the intent loop |
-| To watch each tool call and step in | the intent loop |
-| A single tool on a clean happy path | native `tools` |
+Same model, same JSON Schema muscle you already used for structured output — the
+loop just moves the dispatch into a `for` loop you can watch. And because it leans
+only on `responseConstraint`, which is shipped, it runs the same on a stranger's
+Chrome as it does on yours. The `tools` option in the explainer would be less
+code if it worked; until Chrome ships it on-device, the loop is the tool-calling
+pattern that actually runs today. You also get something native tools hide: every
+call, its args, and its result pass through your own JavaScript, so you can log
+each step and step in.
 
 :::tip Try it
 Run it locally: open `04-structured-output-and-tools/index.html` from the
@@ -358,21 +314,26 @@ Requires: desktop Chrome with Gemini Nano available — see
 
 :::caution Your parse throws on valid-looking JSON
 Symptom: `JSON.parse()` throws `Unexpected token` on output that looks like JSON.
-Cause: the model wrapped it in a fenced code block even with `responseConstraint` set —
-it still happens. Fix: keep the fence-stripping `parseJson` from step 1 and never
-call bare `JSON.parse()` on model output.
+Cause: you parsed a reply from a `prompt()` call with no `responseConstraint` — an
+unconstrained model wraps JSON in prose or a code fence. A *constrained* call
+either returns schema-compliant JSON or throws `SyntaxError`, so it won't feed you
+a fence. Fix: constrain the call, and keep the fence-stripping `parseJson` from
+step 1 for any call you left unconstrained. Never call bare `JSON.parse()` on model
+output.
 :::
 
-:::caution The model ignores your tools
-Symptom: you pass a `tools` array, but `execute` never runs — or `prompt()` throws
-`Tool use feature not enabled`. Cause: native tool calling is unreliable on recent
-Canary builds. Fix: switch to the intent loop; it needs only `responseConstraint`.
+:::caution Passing `tools` to create() does nothing (or worse)
+Symptom: you hand `create()` a `tools` array with `execute` handlers, and the model
+never calls them — or the on-device process falls over mid-prompt. Cause: the
+explainer defines native tool calling, but Chrome hasn't shipped it on-device yet.
+Fix: don't pass `tools`; drive your functions with the intent loop, which needs
+only `responseConstraint`.
 :::
 
 :::caution Tool result comes back as `[object Object]`
-Symptom: the model reasons over garbage. Cause: your `execute` returned an object,
-not a string. Fix: return a `Promise<string>` — `JSON.stringify()` the result
-before you return it.
+Symptom: the model reasons over garbage. Cause: your tool returned an object and you
+fed it straight into the next prompt. Fix: `JSON.stringify()` the result to a string
+before you feed it back — the way every tool in the loop above does.
 :::
 
 :::caution create() hangs, or GPU memory runs out
@@ -385,10 +346,10 @@ on teardown.
 
 ## Recap
 
-- `responseConstraint` — a JSON Schema you pass to `prompt()` — constrains the reply; that reply is a string, so `JSON.parse()` it behind a fence guard.
+- `responseConstraint` — a JSON Schema you pass to `prompt()` — constrains the reply; the reply is a string, so `JSON.parse()` it (or the call throws `SyntaxError` on a schema it can't meet).
 - The four keywords that matter: `type`, `properties`, `enum`, `required`.
-- Native tools are `{ name, description, inputSchema, execute }`, and `execute` returns a `Promise<string>`.
-- When native tools aren't enabled, the intent loop — `responseConstraint` plus a `{ toolName, args, reply }` schema plus a capped prompt/parse/run/feed cycle — does the same job everywhere.
+- Chrome hasn't shipped the `tools` option on-device, so tool calling is a manual pattern you build yourself.
+- The intent loop — `responseConstraint` plus a `{ toolName, args, reply }` schema plus a capped prompt/parse/run/feed cycle — is that pattern, and it runs everywhere `responseConstraint` does.
 
 Structured output and the loop are the same instinct pointed two directions: stop
 hoping the model behaves, and take away its room to misbehave. The parser you
@@ -399,7 +360,7 @@ never wrote is the one that never breaks.
 - [Multimodal: image input](./multimodal) — feed the same session images, not just text.
 - [The Prompt API (LanguageModel)](./prompt-api) — the session lifecycle these tricks sit on.
 - [Shipping & compatibility](./shipping-and-compatibility) — which APIs are stable on which Chrome before you ship.
-- [Tool Calling API reference](https://windowai.danduh.me/tool-calling/tool-calling-api-documentation) — the hosted docs for the tools option.
+- [Tool calling walkthrough](https://windowai.danduh.me/tool-calling/tool-calling-api-documentation) — the hosted docs for the demo.
 
 ---
 

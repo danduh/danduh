@@ -29,7 +29,7 @@ the iframe sends back home.
 
 ## What you'll build
 
-- Return interactive UI from a tool with the MCP Apps shape — `content` plus `_meta['ui.resourceUri']`, not a string.
+- Return interactive UI from a tool with the MCP Apps shape — `content` plus a nested `_meta.ui.resourceUri`, not a string.
 - Render model-authored markup inside `<iframe sandbox="allow-scripts">` instead of your own DOM.
 - Keep the `ui://` URI out of the model's context so it never re-reads its own render.
 - Wire a `postMessage` channel home and validate the message source before trusting a single field.
@@ -62,8 +62,10 @@ flowchart LR
 Ok. A normal tool hands the model a string and the model reads it. A
 generative-UI tool hands back a whole document — and the model never reads that
 part. The shape is the MCP Apps result: a `content` array the model can see, and a
-`_meta['ui.resourceUri']` the host peels off to render. The tool stashes its markup
-in a registry keyed by a `ui://` token and returns the token.
+nested `_meta.ui.resourceUri` (an `McpUiToolMeta` object) the host peels off to
+render. The tool stashes its markup in a registry keyed by a `ui://` token and
+returns the token. (The old flat `_meta["ui/resourceUri"]` — with a slash — is
+deprecated; use the nested form.)
 
 That's the whole contract.
 
@@ -74,22 +76,23 @@ const uiRegistry = new Map();
 
 const TOOLS = {
   // renderForm answers with the MCP Apps shape: model-readable `content`
-  // PLUS a `_meta['ui.resourceUri']` the host resolves to sandboxed markup.
+  // PLUS a nested `_meta.ui.resourceUri` the host resolves to sandboxed markup.
   renderForm(args) {
     const uri = 'ui://gen-ui/form/' + crypto.randomUUID();
     uiRegistry.set(uri, renderFormHtml(args)); // a small, self-contained HTML doc
     return {
       content: [{ type: 'text', text: 'Rendered a form.' }],
-      _meta: { 'ui.resourceUri': uri },
+      _meta: { ui: { resourceUri: uri } },
     };
   },
 };
 ```
 ```ts title="demo.ts"
 // The MCP Apps (SEP-1865) result: text for the model, a token for the host.
+// The `_meta.ui` object is an McpUiToolMeta — resourceUri lives inside it.
 interface UIResource {
   content: Array<{ type: 'text'; text: string }>;
-  _meta: { 'ui.resourceUri': string };
+  _meta: { ui: { resourceUri: string } };
 }
 
 const uiRegistry = new Map<string, string>();
@@ -100,7 +103,7 @@ const TOOLS: Record<string, (args: Record<string, unknown>) => UIResource | stri
     uiRegistry.set(uri, renderFormHtml(args)); // a small, self-contained HTML doc
     return {
       content: [{ type: 'text', text: 'Rendered a form.' }],
-      _meta: { 'ui.resourceUri': uri },
+      _meta: { ui: { resourceUri: uri } },
     };
   },
 };
@@ -150,6 +153,63 @@ function escapeHtml(s: unknown): string {
 ```
 </CodeTabs>
 
+Here's `renderFormHtml` itself — every interpolated field escaped, and a real
+`Content-Security-Policy` baked into the document so even inside the sandbox it
+can't reach the network:
+
+<CodeTabs>
+```js title="demo.js"
+// A small self-contained document: escaped fields, a locked-down CSP,
+// and one line that posts the submitted values back up to the host.
+function renderFormHtml(spec) {
+  const title  = escapeHtml(spec.title || 'Quick form');
+  const submit = escapeHtml(spec.submitLabel || 'Submit');
+  const fields = spec.fields || [{ name: 'name', label: 'Your name', type: 'text' }];
+  const rows = fields.map((f) =>
+    '<label>' + escapeHtml(f.label || f.name) +
+    '<input name="' + escapeHtml(f.name) + '" type="' + escapeHtml(f.type || 'text') + '"></label>'
+  ).join('');
+  return [
+    '<!doctype html><meta charset="utf-8">',
+    // The CSP: no network, no external anything — inline style/script only.
+    '<meta http-equiv="Content-Security-Policy" content="' +
+      "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'\">",
+    '<h2>' + title + '</h2>',
+    '<form id="f">' + rows + '<button type="submit">' + submit + '</button></form>',
+    '<script>document.getElementById("f").addEventListener("submit",(e)=>{',
+    '  e.preventDefault();',
+    '  const values={}; new FormData(e.target).forEach((v,k)=>values[k]=v);',
+    '  parent.postMessage({jsonrpc:"2.0",method:"ui/submit",params:{values}},"*");',
+    '},false);<\/script>',
+  ].join('');
+}
+```
+```ts title="demo.ts"
+function renderFormHtml(spec: FormSpec): string {
+  const title  = escapeHtml(spec.title || 'Quick form');
+  const submit = escapeHtml(spec.submitLabel || 'Submit');
+  const fields = spec.fields || [{ name: 'name', label: 'Your name', type: 'text' }];
+  const rows = fields.map((f) =>
+    '<label>' + escapeHtml(f.label || f.name) +
+    '<input name="' + escapeHtml(f.name) + '" type="' + escapeHtml(f.type || 'text') + '"></label>'
+  ).join('');
+  return [
+    '<!doctype html><meta charset="utf-8">',
+    // The CSP: no network, no external anything — inline style/script only.
+    '<meta http-equiv="Content-Security-Policy" content="' +
+      "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'\">",
+    '<h2>' + title + '</h2>',
+    '<form id="f">' + rows + '<button type="submit">' + submit + '</button></form>',
+    '<script>document.getElementById("f").addEventListener("submit",(e)=>{',
+    '  e.preventDefault();',
+    '  const values={}; new FormData(e.target).forEach((v,k)=>values[k]=v);',
+    '  parent.postMessage({jsonrpc:"2.0",method:"ui/submit",params:{values}},"*");',
+    '},false);<\/script>',
+  ].join('');
+}
+```
+</CodeTabs>
+
 The shipped version goes one level further: a double-iframe relay, where an outer
 frame holds `allow-same-origin` purely to route `postMessage` while the inner frame
 that runs the model's markup stays at null origin with `allow-scripts` only. The
@@ -165,7 +225,8 @@ model starts quoting render URLs at the user, or tries to reason about markup it
 never meant to see. So you split the result. The iframe gets the markup. The model
 gets `content` and nothing else.
 
-One branch does it, and one assert keeps you honest.
+One branch does it, and one guard keeps you honest — `console.assert` only logs,
+it never stops execution, so if you actually want the leak *blocked* you throw:
 
 <CodeTabs>
 ```js title="demo.js"
@@ -173,27 +234,27 @@ const result = tool(args);
 
 let back;
 if (typeof result === 'object') {           // a UI resource, not a plain string
-  renderResource(result._meta['ui.resourceUri']);
+  renderResource(result._meta.ui.resourceUri);
   back = JSON.stringify({ content: result.content }); // ui:// stripped here
 } else {
   back = result;
 }
 
-// The invariant, enforced in code: ui:// must never reach the model.
-console.assert(!back.includes('ui://'), 'ui:// leaked into the model prompt');
+// The invariant, actually enforced: ui:// must never reach the model.
+if (back.includes('ui://')) throw new Error('ui:// leaked into the model prompt');
 ```
 ```ts title="demo.ts"
 const result: UIResource | string = tool(args);
 
 let back: string;
 if (typeof result === 'object') {           // narrowed to UIResource
-  renderResource(result._meta['ui.resourceUri']);
+  renderResource(result._meta.ui.resourceUri);
   back = JSON.stringify({ content: result.content }); // ui:// stripped here
 } else {
   back = result;                            // narrowed to string
 }
 
-console.assert(!back.includes('ui://'), 'ui:// leaked into the model prompt');
+if (back.includes('ui://')) throw new Error('ui:// leaked into the model prompt');
 ```
 </CodeTabs>
 
@@ -247,8 +308,9 @@ a choice — round-trip the values back through the model for a confirmation, or
 the model entirely.
 
 That last option is the one worth stealing. In the shipped code the Pick button
-never wakes the model: it calls `commitRecipeToPlan`, a tool tagged
-`annotations: { visibility: ['app'] }` so it's filtered out of the model's catalog.
+never wakes the model: it calls `commitRecipeToPlan`, a tool whose `McpUiToolMeta`
+sets `_meta.ui.visibility: ['app']` — `visibility` lists who can reach a tool
+(`"model"`, `"app"`, or both), so `['app']` alone drops it from the model's catalog.
 The model can't see it. The iframe can call it. User clicks, the row lands in the
 plan, no token spent.
 
@@ -316,8 +378,9 @@ Cause: a sandboxed `srcdoc` iframe has a null origin, so `event.origin` is the s
 
 :::caution The assistant starts quoting ui:// at the user
 Symptom: replies mention `ui://gen-ui/...` URLs. Cause: you fed the whole tool result
-— `_meta` included — back into `prompt()`. Fix: feed back only `content`, and keep the
-`console.assert(!text.includes('ui://'))` so a regression trips in dev.
+— `_meta` included — back into `prompt()`. Fix: feed back only `content`, and throw
+on `text.includes('ui://')` so a regression fails loudly instead of only logging
+(`console.assert` never halts execution).
 :::
 
 :::caution The rendered UI is dead, or you're nervous it can reach your page
@@ -343,11 +406,11 @@ sessions hold GPU memory. Fix: wire a `monitor` and show progress (`e.loaded` is
 
 ## Recap
 
-- A UI-returning tool answers with `content` plus `_meta['ui.resourceUri']` — text for the model, a token the host resolves to markup.
+- A UI-returning tool answers with `content` plus a nested `_meta.ui.resourceUri` — text for the model, a token the host resolves to markup.
 - The host renders that markup in `<iframe sandbox="allow-scripts">` through `srcdoc`, never in its own DOM, with escaping and a CSP on top.
 - Only `content` goes back to the model; the `ui://` URI is stripped so it never re-enters the loop.
 - The iframe talks back over `postMessage`, and you trust it by source, not origin, because sandboxed frames are null-origin.
-- It all rides the `LanguageModel` intent loop, and app-only tools (`visibility: ['app']`) let the iframe act without a model round-trip.
+- It all rides the `LanguageModel` intent loop, and app-only tools (`_meta.ui.visibility: ['app']`) let the iframe act without a model round-trip.
 
 Generative UI sounds like a rendering feature. It isn't. It's a trust boundary with
 a form stapled to it — the model proposes markup, the iframe contains it, and

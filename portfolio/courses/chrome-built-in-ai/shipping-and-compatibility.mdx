@@ -21,9 +21,13 @@ keywords:
 
 Ok. This is the page you keep pinned in a tab while you ship — every built-in AI API against the exact Chrome that runs it, the flag that unlocks it, and the state it's actually in. Bookmark it, because the matrix moves: Gemini Nano updates itself, origin trials lapse, and a flag that gated a global last month is a stable global this month. Everything below is reconciled against the live capabilities page, so when the table and the browser disagree, believe the browser.
 
+:::note Prerequisites
+Desktop Chrome with built-in AI switched on — if the globals aren't on `self` yet, start with [Setup & the availability lifecycle](./setup-and-availability). This is the reference you keep open while shipping; it assumes you already know the four availability states.
+:::
+
 ## The compatibility matrix
 
-One model sits behind every row — Gemini Nano, 2B or 4B depending on the hardware — behind one download. Read the status column before you promise a PM anything. Stable means it's on the open web with no flag. Behind a flag means localhost or Canary only. Origin trial means you need a token to run it on a deployed origin.
+One model sits behind almost every row — Gemini Nano, a few billion parameters sized to your hardware — behind one download. (Embeddings is the exception: its `SemanticEmbedder` row runs a separate small model, `embeddinggemma-300m`.) Read the status column before you promise a PM anything. Stable means it's on the open web with no flag. Behind a flag means localhost or Canary only. Origin trial means you need a token to run it on a deployed origin.
 
 | API | Global | Chrome | Status | Flag | Lesson |
 |---|---|---|---|---|---|
@@ -32,18 +36,18 @@ One model sits behind every row — Gemini Nano, 2B or 4B depending on the hardw
 | Translator | `Translator` | 138+ | Stable | none · older `#translation-api` | [Translator + Language Detector](./translator-and-language-detector) |
 | Language Detector | `LanguageDetector` | 138+ | Stable | none · older `#language-detection-api` | [Translator + Language Detector](./translator-and-language-detector) |
 | Writer | `Writer` | 137–148 (lapsed) | Behind a flag | `#writer-api-for-gemini-nano` | [Writer & Rewriter](./writer-and-rewriter) |
-| Rewriter | `Rewriter` | 137–148 (lapsed) | Behind a flag | `#rewriter-api-for-gemini-nano` | [Writer & Rewriter](./writer-and-rewriter) |
+| Rewriter | `Rewriter` | 137–148 (lapsed) | Behind a flag | `#writer-api-for-gemini-nano` (shared with Writer) | [Writer & Rewriter](./writer-and-rewriter) |
 | Proofreader | `Proofreader` | 141–145 (lapsed) | Behind a flag | `#proofreader-api` or `#proofreader-api-for-gemini-nano` | [Proofreader](./proofreader) |
-| Embeddings | `SemanticEmbedder` | 152 Canary (EPP) | Behind a flag | `#semantic-embedder-api` | [Embeddings](./embeddings) |
+| Embeddings | `SemanticEmbedder` | Canary only | Behind a flag · Intent to Prototype | `#semantic-embedder-api` | [Embeddings](./embeddings) |
 | WebMCP | `document.modelContext` | 149+ | Origin trial | `#enable-webmcp-testing` | [WebMCP](./webmcp) |
 | Generative UI | Prompt API + sandboxed iframe | experimental | Not production | rides the Prompt API | [Generative UI](./generative-ui) |
 | MCP client | `fetch` + Streamable HTTP | any | No new API | none | [MCP client](./mcp-client) |
 
-One more flag sits under every row: `#optimization-guide-on-device-model`, set to Enabled BypassPerfRequirement — the model download gate you flip on dev machines that sit under the hardware bar. Manage the download at `chrome://on-device-internals/` (the old `chrome://components` row is gone), and remember users have a kill-switch of their own at Settings → System → "Turn on-device AI on or off".
+One more flag sits under every row: `#optimization-guide-on-device-model`, set to Enabled BypassPerfRequirement — the model download gate you flip on dev machines that sit under the hardware bar. Inspect the download at `chrome://on-device-internals/`, and remember users have a kill-switch of their own at Settings → System → "Turn on-device AI on or off".
 
-Every row also needs the same host. Desktop only — Windows 10 and up, macOS 13 and up, Linux, and nothing on Android, iOS, or ChromeOS. Roughly 22 GB of free disk, because Chrome auto-purges the 4 GB model when you drop under that, or after about 30 days idle. A GPU with over 4 GB of VRAM, or a 16 GB-RAM tier. A non-metered network for the first download, and a secure context. Miss any one of those and `availability()` comes back `unavailable` with no flag you can flip to fix it — the hardware bar is covered in [Setup & the availability lifecycle](./setup-and-availability).
+Every row also needs the same host. Desktop only — Windows 10/11, macOS 13+, Linux, or ChromeOS (Platform 16389.0.0+) on Chromebook Plus devices — no Android or iOS. About 22 GB of free disk to pull the model down; Chrome purges it if free space later falls under 10 GB, or if the device fails the eligibility criteria for 30 days (that clock is unmet criteria, not plain idle time). A GPU with more than 4 GB of VRAM, or the CPU path — 16 GB of RAM and 4-plus cores, together. A non-metered network for the first download, and a secure context. Miss any one of those and `availability()` comes back `unavailable` with no flag you can flip to fix it — the hardware bar is covered in [Setup & the availability lifecycle](./setup-and-availability).
 
-Two footnotes the table can't hold. The Prompt API's image input is that same `LanguageModel` global — you opt in with `expectedInputs`, there's no separate global — but pre-148 Canary needed `#prompt-api-for-gemini-nano-multimodal-input`, since retired. And the Proofreader flag is genuinely two-faced: the live capabilities check reads `#proofreader-api`, while the shipped Proofreader page tells you to enable `#proofreader-api-for-gemini-nano`. Enable whichever your Chrome actually exposes — they gate the same API. WebMCP's entry point is `document.modelContext`.
+A few footnotes the table can't hold. `148+ (web)` is the open-web stable line for the Prompt API; it landed in Chrome Extensions and behind the origin trial earlier, and the tuning knobs — `temperature`, `topK`, `params()` — still only apply in extensions or with the trial enabled, never on a plain website. The Prompt API's image input is that same `LanguageModel` global — you opt in with `expectedInputs`, there's no separate global — but pre-148 Canary needed `#prompt-api-for-gemini-nano-multimodal-input`, since retired. The Proofreader flag has drifted: current docs read `#proofreader-api`, though some builds still expose `#proofreader-api-for-gemini-nano` — enable whichever your Chrome shows, they gate the same API. Embeddings is Intent to Prototype — Canary-only behind `#semantic-embedder-api`, not an Early Preview Program (EPP) feature. And WebMCP's entry point is `document.modelContext` (`navigator.modelContext` is deprecated).
 
 ## Feature-detect everything
 
@@ -163,7 +167,7 @@ async function enhance(prompt, { onProgress, cloud }) {
     expectedInputs: [{ type: 'text', languages: ['en'] }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
     monitor(m) {
-      // e.loaded is a 0..1 fraction — there's no e.total.
+      // e.loaded is a 0..1 fraction; e.total exists and is always 1.
       m.addEventListener('downloadprogress', (e) => onProgress(e.loaded * 100));
     },
   });
@@ -190,6 +194,7 @@ async function enhance(prompt: string, { onProgress, cloud }: EnhanceDeps): Prom
     expectedInputs: [{ type: 'text', languages: ['en'] }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
     monitor(m) {
+      // e.loaded is a 0..1 fraction; e.total exists and is always 1.
       m.addEventListener('downloadprogress', (e) => onProgress(e.loaded * 100));
     },
   });
@@ -202,7 +207,7 @@ async function enhance(prompt: string, { onProgress, cloud }: EnhanceDeps): Prom
 ```
 </CodeTabs>
 
-One exception to the progress bar: Embeddings ships without a `monitor` yet. You can't draw a download bar for `SemanticEmbedder`, so kick off `create()`, then poll `availability()` on a gentle interval until it reads `available` — sparingly, because polling can itself start a download.
+No exception for Embeddings, either: `SemanticEmbedder.create({ monitor(m) { … } })` takes the same `monitor` callback, so draw the same download bar off its `downloadprogress` events. And `availability()` is read-only — it never kicks off a download — so the worst a poll loop costs you is wasted cycles, not a surprise fetch. There's just no reason to spin on it; wire the `monitor` instead.
 
 ## Free the memory
 
@@ -225,13 +230,19 @@ window.addEventListener('beforeunload', () => session.destroy());
 
 Leak enough of these and the next `create()` fails on a machine that had plenty of room ten sessions ago. It won't look like your bug. It is.
 
+:::caution Gotcha: create() suddenly throws NotSupportedError
+**Symptom:** `create()` starts throwing `NotSupportedError` for calls that worked a minute ago, and `availability()` flips to `unavailable` — even for bare, option-less calls.
+**Cause:** the on-device model process crashed enough times to trip an undocumented cooldown, and a tight retry loop is what trips it.
+**Fix:** stop retrying, check `chrome://crashes`, wait. It clears itself after a few minutes.
+:::
+
 ## The pre-ship checklist
 
 Run this before it goes anywhere near a user. Not a vibe — a list you tick.
 
 - [ ] Feature-detect every global with `typeof LanguageModel !== 'undefined'` (and the same for `Summarizer`, `Translator`, `LanguageDetector`, the rest) inside a secure context — https or localhost — before you touch it.
 - [ ] Call `availability()` and handle all four states: `unavailable`, `downloadable`, `downloading`, `available`.
-- [ ] For `downloadable` / `downloading`, create with a `monitor` and render `e.loaded * 100` as a progress bar. (`e.loaded` is a 0..1 fraction; there is no `e.total`.)
+- [ ] For `downloadable` / `downloading`, create with a `monitor` and render `e.loaded * 100` as a progress bar. (`e.loaded` is a 0..1 fraction; `e.total` exists and is always 1.)
 - [ ] Have a real fallback for `unavailable` — a cloud API or a reduced feature. Never a blank page.
 - [ ] `destroy()` every session, task instance, and clone, and wire a `beforeunload` teardown.
 - [ ] Declare `expectedInputs`/`expectedOutputs` (with the languages you use) on every Prompt API `create()`.
@@ -247,7 +258,7 @@ Don't trust a table — trust the browser in front of you. The live capabilities
 
 ## Recap
 
-- One model, Gemini Nano, sits behind every API — but they land at different Chrome versions and stability tiers, so the status column is the promise you're actually allowed to make.
+- One model, Gemini Nano, sits behind almost every API — embeddings is the exception, on its own small model — and they land at different Chrome versions and stability tiers, so the status column is the promise you're actually allowed to make.
 - Feature-detect `typeof X !== 'undefined'` in a secure context, then `availability()`, before you create anything.
 - Treat built-in AI as an enhancement: handle all four states, wire a `monitor` for the download, and always keep a fallback for `unavailable`.
 - `destroy()` every session and clone, or orphaned sessions pin GPU memory until the tab dies.

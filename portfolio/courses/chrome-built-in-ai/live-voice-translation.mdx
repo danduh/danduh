@@ -238,11 +238,11 @@ This half you already wrote in
 the source from `recognition.lang` stripped to its short code, take the target
 from a select, and gate every pair on
 `Translator.availability({ sourceLanguage, targetLanguage })` before you
-`create()`. First touch of a pair downloads its pack — 10 to 50 MB — so wire the
-`monitor` and read `e.loaded` as a 0-to-1 fraction, exactly like before. Then hold
-onto that translator: one instance per pair, reused for every sentence, never
+`create()`. First touch of a pair downloads its pack — tens of megabytes — so wire
+the `monitor` and read `e.loaded` as a 0-to-1 fraction, exactly like before. Then
+hold onto that translator: one instance per pair, reused for every sentence, never
 rebuilt per final. Recreate a translator for each spoken sentence and you turn a
-50 ms translation into a five-second one.
+fraction-of-a-second translation into a multi-second one.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -463,10 +463,11 @@ wrong shape, or you left something running.
 :::caution SpeechRecognition is undefined
 Symptom: `new SpeechRecognitionCtor()` throws because the constructor came back
 `undefined`. Cause: you read `window.SpeechRecognition` only, but Chrome still
-exposes it as `window.webkitSpeechRecognition`, and non-Chromium browsers
-(Firefox, iOS Safari) don't ship it at all. Fix: feature-detect both —
-`window.SpeechRecognition || window.webkitSpeechRecognition` — and if neither
-exists, degrade to a message plus the hosted demo.
+exposes it as `window.webkitSpeechRecognition`, and Firefox doesn't ship it
+enabled at all. Safari does ship it — Siri-backed, under the same `webkit`
+prefix, since Safari 14.1 / iOS 14.5 — so the prefix check catches it there too.
+Fix: feature-detect both — `window.SpeechRecognition || window.webkitSpeechRecognition`
+— and if neither exists, degrade to a message plus the hosted demo.
 :::
 
 :::caution The mic is denied, or nothing transcribes offline

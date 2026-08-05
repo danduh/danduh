@@ -25,7 +25,7 @@ asterisk up front. Both are still stuck behind Chrome flags, which means that on
 most of the machines your code will ever run on, `availability()` looks you in
 the eye, says `unavailable`, and doesn't blink. Writer drafts new text from a
 brief. Rewriter takes text you already have and moves it — more formal, shorter,
-plain instead of markdown. Same Gemini Nano, different tuned system prompt. By
+plain instead of markdown. Same Gemini Nano, different LoRA adapter. By
 the end of this page you'll gate each on its own `availability()`, stream a draft
 in a word at a time, reshape it, and degrade like an adult on every device where
 the flag was never flipped.
@@ -43,9 +43,9 @@ Desktop Chrome with built-in AI switched on. New here? Work through
 [Setup & the availability lifecycle](./setup-and-availability) first, and keep
 [the compatibility matrix](./shipping-and-compatibility) handy for what's stable
 where. One thing to know going in: unlike the Summarizer, `Writer` and
-`Rewriter` are not stable. They're gated behind
-`chrome://flags/#writer-api-for-gemini-nano` and
-`chrome://flags/#rewriter-api-for-gemini-nano`, off by default, prototype-only.
+`Rewriter` are not stable. They ran a joint origin trial through Chrome 148 and
+are still off by default — both share the one flag
+`chrome://flags/#writer-api-for-gemini-nano` (there's no separate Rewriter flag).
 This page assumes you already know the four availability states.
 :::
 
@@ -64,7 +64,7 @@ So why not just prompt the raw model? You can. `LanguageModel` will happily
 write a release note if you ask it nicely. It'll also open with "Sure, here's a
 draft:", wrap the thing in a disclaimer, and editorialize about how exciting v2.0
 is — because a general chat model wants to chat. Writer and Rewriter don't chat.
-Their system prompts are tuned for one job: produce the text, in the shape
+Their adapters are tuned for one job: produce the text, in the shape
 requested, and stop.
 
 | You have… | You want… | Reach for |
@@ -119,32 +119,37 @@ if (typeof Rewriter !== 'undefined') {
 
 `availability()` can also throw on builds that half-know these APIs — wrap it in
 try/catch and treat a throw as `unavailable`. And don't poll it in a loop to
-"wait" for the flag; a loop can kick off a model download you never asked for.
+"wait" for the flag. `availability()` is read-only — it never downloads anything,
+so polling won't hurt you; it's just pointless. Only `create()` starts a
+download, and only inside a user gesture.
 
 ## Write from a brief
 
 Let's make some text. `Writer.create()` takes the shape you want — `tone`,
 `format`, `length` — plus an optional `sharedContext` that frames everything the
-instance writes. Then `write()` takes the brief and hands back the finished
-string. Wire the `monitor` on the first `create()`, because a cold machine
-blocks on the same multi-GB Nano download as every other API here.
+instance writes. Then `write()` takes the brief — and, like `rewrite()`, an
+optional per-call `context` — and hands back the finished string. Wire the
+`monitor` on the first `create()`, because a cold machine blocks on the same
+multi-GB Nano download as every other API here. That download only starts from a
+user gesture, so keep the first `create()` behind a click.
 
 <CodeTabs>
 ```js title="demo.js"
 const writer = await Writer.create({
   tone: 'formal',        // 'formal' | 'neutral' | 'casual'
   format: 'plain-text',  // 'markdown' | 'plain-text'
-  length: 'medium',      // 'short' | 'medium' | 'long'
+  length: 'short',       // 'short' | 'medium' | 'long'
   monitor(m) {
     m.addEventListener('downloadprogress', (e) => {
-      // e.loaded is a 0..1 fraction — there is no e.total in current builds
+      // e.loaded is a 0..1 fraction; e.total exists and is always 1
       console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
     });
   },
 });
 
 const draft = await writer.write(
-  'Draft a release note for v2.0 of our CLI: adds a --json flag and Windows builds.'
+  'Draft a release note for v2.0 of our CLI: adds a --json flag and Windows builds.',
+  { context: 'Public changelog for developers. Keep flag names exact.' }
 );
 console.log(draft);
 writer.destroy();
@@ -157,7 +162,7 @@ type WriterLength = 'short' | 'medium' | 'long';
 const writer = await Writer.create({
   tone: 'formal' as WriterTone,
   format: 'plain-text' as WriterFormat,
-  length: 'medium' as WriterLength,
+  length: 'short' as WriterLength,
   monitor(m: AICreateMonitor) {
     m.addEventListener('downloadprogress', (e: ProgressEvent) => {
       console.log(`Downloading model… ${Math.round(e.loaded * 100)}%`);
@@ -166,7 +171,8 @@ const writer = await Writer.create({
 });
 
 const draft: string = await writer.write(
-  'Draft a release note for v2.0 of our CLI: adds a --json flag and Windows builds.'
+  'Draft a release note for v2.0 of our CLI: adds a --json flag and Windows builds.',
+  { context: 'Public changelog for developers. Keep flag names exact.' }
 );
 console.log(draft);
 writer.destroy();
@@ -177,7 +183,7 @@ writer.destroy();
 |---|---|---|
 | `tone` | `'formal'`, `'neutral'`, `'casual'` | `'neutral'` |
 | `format` | `'markdown'`, `'plain-text'` | `'markdown'` |
-| `length` | `'short'`, `'medium'`, `'long'` | `'medium'` |
+| `length` | `'short'`, `'medium'`, `'long'` | `'short'` |
 
 Pick what you'd pick for a colleague and adjust from there. `casual` for the
 changelog nobody reads, `formal` for the email legal will. The model won't argue.
@@ -226,10 +232,12 @@ rewriter.destroy();
 ```
 </CodeTabs>
 
-The per-call `context` is the escape hatch. Same rewriter instance, different
-framing per input — "this is for a child," "this is going in a legal filing,"
-"keep every product name exact." You set the axis once at `create()` and steer
-the individual rewrite with a sentence.
+The per-call `context` is the escape hatch. Same instance, different framing per
+input — "this is for a child," "this is going in a legal filing," "keep every
+product name exact." You set the axis once at `create()` and steer the individual
+call with a sentence. It's not Rewriter-only: `write()` and `writeStreaming()`
+take the same per-call `context`, on top of the `sharedContext` you set at
+`create()`.
 
 ## Stream the deltas
 
@@ -242,9 +250,9 @@ Append. Don't replace.
 
 <CodeTabs>
 ```js title="demo.js"
-// Writer, streamed:
+// Writer, streamed, with the same per-call context:
 let out = '';
-const writeStream = writer.writeStreaming(brief);
+const writeStream = writer.writeStreaming(brief, { context: 'For the changelog.' });
 for await (const chunk of writeStream) {
   out += chunk; // deltas — append, never replace
   render(out);
@@ -260,7 +268,9 @@ for await (const chunk of rewriteStream) {
 ```
 ```ts title="demo.ts"
 let out = '';
-const writeStream: ReadableStream<string> = writer.writeStreaming(brief);
+const writeStream: ReadableStream<string> = writer.writeStreaming(brief, {
+  context: 'For the changelog.',
+});
 for await (const chunk of writeStream) {
   out += chunk; // deltas — append, never replace
   render(out);
@@ -346,7 +356,7 @@ window.addEventListener('beforeunload', () => {
   rewriter?.destroy();
 });
 
-// Writing or rewriting after destroy() throws — create a fresh instance instead.
+// Writing or rewriting after destroy() throws AbortError — create a fresh instance instead.
 ```
 ```ts title="demo.ts"
 writer.destroy();
@@ -357,7 +367,7 @@ window.addEventListener('beforeunload', () => {
   rewriter?.destroy();
 });
 
-// Writing or rewriting after destroy() throws — create a fresh instance instead.
+// Writing or rewriting after destroy() throws AbortError — create a fresh instance instead.
 ```
 </CodeTabs>
 
@@ -386,12 +396,11 @@ Nano housekeeping.
 :::caution availability() returns "unavailable" on a healthy machine
 Symptom: `Writer.availability()` or `Rewriter.availability()` returns
 `unavailable` on a desktop that runs the Prompt API fine. Cause: these APIs are
-still origin-trial/flag-gated and off by default. Fix: enable
-`chrome://flags/#writer-api-for-gemini-nano` and
-`chrome://flags/#rewriter-api-for-gemini-nano` (plus
-`chrome://flags/#optimization-guide-on-device-model` set to
-`Enabled BypassPerfRequirement`), then restart Chrome. In production you can't
-flip a flag on a user's machine — gate the feature and degrade.
+still origin-trial/flag-gated and off by default. Fix: enable the one shared flag
+`chrome://flags/#writer-api-for-gemini-nano` (it covers both APIs — there is no
+separate Rewriter flag), plus `chrome://flags/#optimization-guide-on-device-model`
+set to `Enabled BypassPerfRequirement`, then restart Chrome. In production you
+can't flip a flag on a user's machine — gate the feature and degrade.
 :::
 
 :::caution create() hangs on the first call
@@ -401,14 +410,16 @@ nothing reports progress. Fix: pass `monitor(m)` and read `e.loaded` (a 0..1
 fraction). `create()` resolves when the download finishes, not before.
 :::
 
-:::caution create() throws NotSupportedError
-Symptom: `create()` rejects before you hold an instance. Cause: an option value
-the build doesn't accept — often a Writer `tone` of `'more-formal'` (that's a
-Rewriter value) or a Rewriter `length` of `'medium'` (that's a Writer value).
-Fix: keep the two vocabularies straight. Writer tones are
-`formal`/`neutral`/`casual`; Rewriter tones are `as-is`/`more-formal`/`more-casual`.
-Probe a specific config with `availability({ tone, format, length })` before you
-commit to it.
+:::caution create() rejects on a bad option
+Symptom: `create()` rejects before you hand it a brief. Cause: usually a value
+from the wrong vocabulary — a Writer `tone` of `'more-formal'` (that's a Rewriter
+value) or a Rewriter `length` of `'medium'` (that's a Writer value). A bad enum
+string like that surfaces as a `TypeError`, not a `NotSupportedError` —
+`NotSupportedError` is reserved for a configuration the model genuinely can't
+run, like an unsupported language. Fix: keep the two vocabularies straight.
+Writer tones are `formal`/`neutral`/`casual`; Rewriter tones are
+`as-is`/`more-formal`/`more-casual`. Probe a specific config with
+`availability({ tone, format, length })` before you commit to it.
 :::
 
 :::caution The streamed draft shows only the last few words

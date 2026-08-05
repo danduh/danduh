@@ -37,7 +37,7 @@ Desktop Chrome with built-in AI. WebMCP is a draft API behind a flag — enable 
 
 For twenty-five years, automating a web app meant one of three miserable options: build a public API with its own auth, or drive a Selenium script that pretends to be a user, or scrape the rendered pixels and guess where to click. WebMCP adds a fourth. The page declares its own actions, and any agent — an extension, an OS-level assistant, or the `LanguageModel` sitting in the same tab — calls them by name. The `execute` handler runs in the page's context, with the user's cookies and session, exactly as if they'd clicked the button themselves. The page is the trust boundary.
 
-The teams already prototyping against it are the deep-state, transactional ones — Booking.com, Shopify, Instacart, TurboTax — the apps where "the agent does my work" means checkout, filing, a listing. And the reason it beats pixel-peeping is boring arithmetic: a named tool call with a validated schema lands somewhere around 98% task accuracy against a fraction of the tokens, because the agent stops reverse-engineering a UI from a screenshot.
+The apps that want this most are the transactional ones — checkout, filing, booking, a listing — where "the agent does my work" means a real side effect, not a summary. And the reason it beats pixel-peeping is boring: a schema-validated, named tool call just doesn't fail the way guessing-from-a-screenshot fails. The agent stops reverse-engineering a UI and calls the function, against a fraction of the tokens.
 
 One thing first. The page's tools live on `document.modelContext` — feature-detect it, and bail to a banner if it's missing.
 
@@ -51,7 +51,7 @@ if (!modelContext) {
   // keep the page usable and point people at the flag.
   showFlagBanner('Enable chrome://flags/#enable-webmcp-testing to expose tools.');
 } else {
-  registerTools(modelContext); // safe to call now
+  await registerTools(modelContext); // defined below — registration is async
 }
 ```
 ```ts title="demo.ts" {3}
@@ -62,7 +62,7 @@ const modelContext: ModelContext | undefined = document.modelContext;
 if (!modelContext) {
   showFlagBanner('Enable chrome://flags/#enable-webmcp-testing to expose tools.');
 } else {
-  registerTools(modelContext);
+  await registerTools(modelContext);
 }
 ```
 </CodeTabs>
@@ -97,6 +97,18 @@ const addItem = {
     return `Added ${qty} of "${name}".`;
   },
 };
+
+// listItems doesn't mutate — readOnlyHint: true tells an agent it can reorder
+// or cache the call. Return an object; the browser serializes it back.
+const listItems = {
+  name: 'listItems',
+  description: 'List the current cart contents. Read-only.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { readOnlyHint: true },
+  async execute() {
+    return { items: cart, count: cart.length };
+  },
+};
 ```
 ```ts title="demo.ts"
 // ModelContextTool is the descriptor shape; execute resolves to Promise<unknown>.
@@ -121,14 +133,25 @@ const addItem: ModelContextTool = {
     return `Added ${qty} of "${name}".`;
   },
 };
+
+// Read-only tool: readOnlyHint: true. Returns an object, serialized back.
+const listItems: ModelContextTool = {
+  name: 'listItems',
+  description: 'List the current cart contents. Read-only.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { readOnlyHint: true },
+  async execute(): Promise<unknown> {
+    return { items: cart, count: cart.length };
+  },
+};
 ```
 </CodeTabs>
 
 ## Register the set and tear it down
 
-Registration is the whole handshake. There is no connect step, no session to open — you call `registerTool` per tool and they're live. Pass the same `AbortController` signal to every one, and you buy yourself a single off switch: abort once, and the whole set unregisters. That signal path is the portable one, working across every Chrome that ships WebMCP from 146 to 150. Chrome 150 also adds `unregisterTool(name)` and `clearContext()`, but the signal wins on reach, so reach for it.
+Registration is the whole handshake. There is no connect step, no session to open — you `await registerTool` per tool and they're live. `registerTool` returns a Promise, so await it: on a duplicate name it *rejects* with `InvalidStateError` — an async rejection a synchronous `try/catch` never sees. Pass the same `AbortController` signal to every one, and you buy yourself a single off switch: abort once, and the whole set unregisters. That signal is the only teardown path — there is no `unregisterTool(name)` and no `clearContext()`.
 
-Where does the abort go? In a plain page, `beforeunload`. In React, the `useEffect` cleanup — and there it matters more than it looks, because StrictMode mounts twice and a second `registerTool` for a name already taken throws.
+Where does the abort go? In a plain page, `beforeunload`. In React, the `useEffect` cleanup — and there it matters more than it looks, because StrictMode mounts twice, and re-registering a name already taken rejects with `InvalidStateError`.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -136,23 +159,28 @@ Where does the abort go? In a plain page, `beforeunload`. In React, the `useEffe
 const CART_TOOLS = [addItem, removeItem, listItems];
 
 // One controller governs every registration…
-const controller = new AbortController();
-for (const tool of CART_TOOLS) {
-  modelContext.registerTool(tool, { signal: controller.signal });
+async function registerTools(mc) {
+  const controller = new AbortController();
+  for (const tool of CART_TOOLS) {
+    // await — registerTool REJECTS on a duplicate name; a sync try/catch misses it.
+    await mc.registerTool(tool, { signal: controller.signal });
+  }
+  // …so one abort() unregisters the whole set. Do it on teardown.
+  window.addEventListener('beforeunload', () => controller.abort());
+  return controller;
 }
-
-// …so one abort() unregisters the whole set. Do it on teardown.
-window.addEventListener('beforeunload', () => controller.abort());
 ```
 ```ts title="demo.ts"
 const CART_TOOLS: ModelContextTool[] = [addItem, removeItem, listItems];
 
-const controller = new AbortController();
-for (const tool of CART_TOOLS) {
-  modelContext.registerTool(tool, { signal: controller.signal });
+async function registerTools(mc: ModelContext): Promise<AbortController> {
+  const controller = new AbortController();
+  for (const tool of CART_TOOLS) {
+    await mc.registerTool(tool, { signal: controller.signal });
+  }
+  window.addEventListener('beforeunload', () => controller.abort());
+  return controller;
 }
-
-window.addEventListener('beforeunload', () => controller.abort());
 ```
 </CodeTabs>
 
@@ -266,12 +294,13 @@ is set and theirs isn't, or their page isn't a secure context. Fix: feature-dete
 just because it was on your machine.
 :::
 
-:::caution DOMException: duplicate tool name
-Symptom: a second `registerTool` for the same name throws a `DOMException`
-mentioning "duplicate tool name" or "already registered". Cause: you registered
-that name twice without aborting the first — in React, StrictMode double-invokes
-your effect. Fix: keep one `AbortController`, abort the prior registration before
-re-registering, and treat the duplicate error as already-registered.
+:::caution InvalidStateError: Duplicate tool name
+Symptom: a second `registerTool` for the same name rejects with
+`InvalidStateError: Duplicate tool name`. Cause: you registered that name twice
+without aborting the first — in React, StrictMode double-invokes your effect.
+Fix: the rejection is async, so `await` the call (or `.catch()` it) — a
+synchronous `try/catch` won't see it. Keep one `AbortController`, abort the prior
+registration before re-registering, and treat the duplicate as already-registered.
 :::
 
 :::caution registerTool throws on undefined
@@ -299,7 +328,7 @@ with the intent loop, and keep a fence-stripping parse for the occasional fenced
 
 - The entry point is `document.modelContext` — feature-detect it, bail to a banner.
 - A tool is a descriptor: `name`, `description`, `inputSchema`, `execute` — and `execute` runs in the page with the user's session and resolves to `Promise<unknown>`.
-- One `AbortController` across the set means one `abort()` unregisters everything; it's portable across Chrome 146–150.
+- `registerTool` returns a Promise that rejects with `InvalidStateError` on a duplicate name — `await` it. One `AbortController` across the set means one `abort()` unregisters everything; that signal is the only teardown path.
 - The in-page agent is the same intent loop from the tools lesson, dispatching into the same registered `CART_TOOLS` — one definition, two consumers.
 - WebMCP is a moving draft behind a flag; gate it, never ship it as a hard dependency.
 

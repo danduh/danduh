@@ -23,10 +23,10 @@ So here's the upgrade: multimodal image input is one option at `create()`, not a
 
 ## What you'll build
 
-- Probe multimodal availability without letting older builds throw in your face.
+- Probe multimodal availability defensively, so an unfamiliar build can't throw in your face.
 - Opt a session into image input with `expectedInputs` so the runtime loads the vision tower.
 - Turn a dropped, pasted, or picked file into a `Blob` and preview it.
-- Downsample to the 512px vision tile, then ask with role-wrapped content parts.
+- Downsample the picture to a modest size, then ask with role-wrapped content parts.
 - Stream the answer back and `destroy()` the session on teardown.
 
 :::note Prerequisites
@@ -35,7 +35,7 @@ Desktop Chrome with built-in AI enabled, and you've already met the [Prompt API]
 
 ## Probe for image support
 
-Same `availability()` call as every other API, with one option bolted on: you ask specifically about images. Here's the catch — builds that predate multimodal don't recognise the option and throw instead of politely returning a string. So you wrap it and treat a throw as a no.
+Same `availability()` call as every other API, with one option bolted on: you ask specifically about images. Wrap it in try/catch anyway — you can't count on every build recognising the option, and one that doesn't may throw instead of politely returning a string. So you treat a throw as a no.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -45,7 +45,7 @@ async function getMultimodalAvailability() {
     // highlight-next-line
     return await LanguageModel.availability({ expectedInputs: [{ type: 'image' }] });
   } catch {
-    return 'unavailable'; // older builds throw on the option — treat it as a no
+    return 'unavailable'; // an unrecognised option may throw — treat it as a no
   }
 }
 ```
@@ -120,6 +120,7 @@ The model takes a handful of image types — an `ImageBitmap`, an `ImageData`, a
 ```js title="demo.js"
 const fileInput = document.getElementById('file');
 const drop = document.getElementById('drop');
+const preview = document.getElementById('preview');
 let currentImage = null;
 
 function setImage(blob) {
@@ -148,12 +149,13 @@ document.addEventListener('paste', (e) => {
 ```ts title="demo.ts"
 const fileInput = document.getElementById('file') as HTMLInputElement;
 const drop = document.getElementById('drop') as HTMLElement;
+const preview = document.getElementById('preview') as HTMLImageElement;
 let currentImage: Blob | null = null;
 
 function setImage(blob: Blob | null | undefined): void {
   if (!blob || !blob.type.startsWith('image/')) return;
   currentImage = blob;
-  (preview as HTMLImageElement).src = URL.createObjectURL(blob);
+  preview.src = URL.createObjectURL(blob);
 }
 
 fileInput.addEventListener('change', () => setImage(fileInput.files?.[0]));
@@ -172,9 +174,9 @@ document.addEventListener('paste', (e: ClipboardEvent) => {
 ```
 </CodeTabs>
 
-## Downsample to the vision tile
+## Downsample before you ask
 
-Behind the glass the vision tower squashes whatever you send down to roughly a 512-pixel tile. So a 4032×3024 phone photo buys you nothing but a slower prompt and more memory — the answer comes back identical to the 512px version. Shrink it yourself first. Draw the image into a canvas at 512 on the long side, then reach for `canvas.toBlob`, which hands you `null` on failure — so check for it.
+Behind the glass the model works from a small internal view of the picture, not your full-resolution file. So a giant phone photo buys you little but a slower prompt and more memory — the answer barely moves. Shrink it yourself first. Draw the image into a canvas capped on the long side (512px is plenty here), then reach for `canvas.toBlob`, which hands you `null` on failure — so check for it.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -272,6 +274,8 @@ For a one-word label, `prompt()` is fine. For a description, you don't want the 
 
 <CodeTabs>
 ```js title="demo.js"
+const output = document.getElementById('output');
+
 async function askStreaming(question) {
   const session = await getSession();
   const image = await downsample(currentImage, 512);
@@ -292,6 +296,8 @@ async function askStreaming(question) {
 }
 ```
 ```ts title="demo.ts"
+const output = document.getElementById('output') as HTMLElement;
+
 async function askStreaming(question: string): Promise<void> {
   const session = (await getSession()) as unknown as MultimodalSession;
   const image = await downsample(currentImage!, 512);
@@ -348,19 +354,25 @@ Fix: declare `expectedInputs: [{type:'text', languages:['en']}, {type:'image'}]`
 :::
 
 :::caution availability() throws instead of answering
-Cause: the build predates multimodal and doesn't recognise the `expectedInputs` option, so it throws rather than returning a string.
+Cause: a build that doesn't recognise the `expectedInputs` option may throw rather than return a string.
 
-Fix: wrap the probe in try/catch and treat a throw as `"unavailable"`. Never assume the option exists.
+Fix: wrap the probe in try/catch and treat a throw as `"unavailable"`. Don't assume every build accepts the option.
 :::
 
 :::caution The first prompt hangs for a long time
 Cause: the first multimodal `create()` triggers the Gemini Nano download, and `create()` doesn't resolve until that finishes — several GB on a cold machine.
 
-Fix: pass a `monitor` and show progress. `e.loaded` is a 0..1 fraction, so multiply by 100 for a percentage — there's no `e.total` in current builds.
+Fix: pass a `monitor` and show progress. `e.loaded` is a 0..1 fraction, so multiply by 100 for a percentage. (`e.total` is there too, but it's always 1 — `loaded` already is your fraction.)
+:::
+
+:::caution create() rejects before the model even downloads
+Cause: the model wasn't on disk yet and you called `create()` outside a user gesture. Starting the download needs one.
+
+Fix: kick off that first `create()` from a click or similar. Once the model is downloaded, later `create()` calls don't need a fresh gesture. In this demo the first `create()` rides the Ask button's click, so you're already covered.
 :::
 
 :::caution The answer is confidently wrong
-Cause: Nano is a generalist. It's weak on dense or handwritten text, on counting past ~10, and on faces — and it won't warn you that it's guessing.
+Cause: Nano is a generalist. It's weak on dense or handwritten text, on counting a crowd of things, and on faces — and it won't warn you that it's guessing.
 
 Fix: keep the ask to "roughly what's here". For exact counts, precise coordinates, handwriting, or recognising a specific person, reach for a specialised model — this isn't the tool.
 :::
@@ -376,7 +388,7 @@ Fix: create one session, reuse it, and `destroy()` it on teardown. One in, one o
 - `availability({expectedInputs:[{type:'image'}]})`, wrapped in try/catch, tells you whether images are on the table.
 - `expectedInputs` at `create()` loads the vision tower; without it the session stays blind.
 - A `Blob` from a picker, a drop, or a paste is all the same to `prompt()`.
-- Downsample to ~512px — same answer, a fraction of the cost.
+- Downsample before you ask — the answer barely moves, at a fraction of the cost.
 - Content parts are role-wrapped and keyed by `value`; stream the deltas and append them.
 - Keep one session, `destroy()` it on the way out.
 

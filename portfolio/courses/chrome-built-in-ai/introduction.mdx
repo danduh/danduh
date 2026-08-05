@@ -19,7 +19,7 @@ keywords:
 
 # Introduction: AI in the browser
 
-Ok. Somewhere in the last year, your users' browsers quietly grew a language model. Chrome's built-in AI ships Gemini Nano — a real, instruction-tuned model, about 4 GB on disk — on every desktop install that clears the hardware bar, and hands it to your page as plain JavaScript globals. No backend. No API key. No per-token bill, and not one byte of user data leaves the machine. This lesson is the map: what built-in AI actually is, the API family you'll wire across the course, and the one four-verb pattern every single one of them shares.
+Ok. Somewhere in the last year, your users' browsers quietly grew a language model. Chrome's built-in AI ships Gemini Nano — a real, instruction-tuned model, a few gigabytes on disk — on every desktop install that clears the hardware bar, and hands it to your page as plain JavaScript globals. No backend. No API key. No per-token bill, and not one byte of user data leaves the machine. This lesson is the map: what built-in AI actually is, the API family you'll wire across the course, and the one four-verb pattern every single one of them shares.
 
 ## What you'll build
 
@@ -29,14 +29,14 @@ Ok. Somewhere in the last year, your users' browsers quietly grew a language mod
 - Ship a first on-device prompt that streams a reply with no backend, no key, and no bill.
 
 :::note Prerequisites
-Desktop Chrome (Windows, macOS, or Linux) with built-in AI available. If `availability()` comes back `unavailable`, start with [Setup & the availability lifecycle](./setup-and-availability); for the full version-and-flag picture, keep [the compatibility matrix](./shipping-and-compatibility) open in a tab.
+Desktop Chrome (Windows, macOS, Linux, or ChromeOS on a Chromebook Plus) with built-in AI available. If `availability()` comes back `unavailable`, start with [Setup & the availability lifecycle](./setup-and-availability); for the full version-and-flag picture, keep [the compatibility matrix](./shipping-and-compatibility) open in a tab.
 :::
 
 ## What "built-in AI" actually means
 
 So what is it. Not a cloud endpoint you hit with a key. Not a wrapper around someone's REST API. Not a model you bundle and ship yourself.
 
-Built-in AI is a language model — Gemini Nano, 2 to 4 billion parameters depending on your hardware — sitting on the user's disk, managed by Chrome, exposed to your page through bare browser globals like `LanguageModel`. You reach for it the way you reach for `fetch` or `localStorage`. The model runs on the user's own GPU. The inference never leaves the tab.
+Built-in AI is a language model — Gemini Nano, a few billion parameters — sitting on the user's disk, managed by Chrome, exposed to your page through bare browser globals like `LanguageModel`. You reach for it the way you reach for `fetch` or `localStorage`. The model runs on the user's own hardware — the GPU where there's the VRAM for it, the CPU otherwise. The inference never leaves the tab.
 
 Which means the three numbers that used to define whether an AI feature was even worth building — cost per call, round-trip latency, data-egress risk — all collapse to the same value.
 
@@ -48,9 +48,9 @@ Here's the whole surface on one screen. One general-purpose Prompt API, a set of
 
 | API | What it does | Lesson |
 |---|---|---|
-| Prompt API (`LanguageModel`) | Chat-style prompting with streaming, tools, and structured output | [Prompt API](./prompt-api) |
+| Prompt API (`LanguageModel`) | Chat-style prompting with streaming and structured output | [Prompt API](./prompt-api) |
 | `Summarizer` | Compress long text to a TL;DR, key points, or a headline | [Summarizer](./summarizer) |
-| `Translator` + `LanguageDetector` | Detect the language, then translate across ~50 pairs | [Translator + Language Detector](./translator-and-language-detector) |
+| `Translator` + `LanguageDetector` | Detect the language, then translate across dozens of language pairs | [Translator + Language Detector](./translator-and-language-detector) |
 | `Writer` / `Rewriter` | Draft new text, or change an existing text's tone, length, or formality | [Writer & Rewriter](./writer-and-rewriter) |
 | `Proofreader` | Grammar and spelling fixes, with positions | [Proofreader](./proofreader) |
 | Embeddings | Turn text into vectors for on-device search and similarity | [Embeddings](./embeddings) |
@@ -61,7 +61,7 @@ Here's the whole surface on one screen. One general-purpose Prompt API, a set of
 | Observability & tracing | See what the model actually did, call by call | [Observability & tracing](./observability-and-tracing) |
 | Evaluation | Measure whether the output is any good | [Evaluation](./evaluation) |
 
-One model sits behind every row — Gemini Nano. The task APIs aren't separate models; they're tuned system prompts and decoder configs layered over the same weights. Download it once and the whole table lights up. A failed download breaks all of them at once.
+One model sits behind almost every row — Gemini Nano, sized to whatever hardware you're on. The task APIs aren't separate models either; they're LoRA adapters — a task-specific layer bolted onto the same base weights — so you download the base once and the rest of the table lights up. Break that one download and they all go down together. Embeddings is the lone exception: it runs its own small model, `embeddinggemma-300m`, on a separate download.
 
 ## Why on-device — and the honest cost
 
@@ -71,11 +71,11 @@ Privacy — the text never leaves the browser process, which collapses an entire
 
 Cost — a cloud call runs $0.001 to $0.10, and a local call runs $0. That's not a discount. That's a different economic model, where "summarize this on every keystroke" goes from a line item to a `for` loop.
 
-Latency — no 200-to-2000ms round trip. About 300ms to warm a session, then tokens stream at conversational speed.
+Latency — no network round trip. A fraction of a second to warm a session, then tokens stream at conversational speed.
 
 Offline — the plane, the train, the dead-zone office. The feature just works.
 
-Now, let's be honest about the bill. It's a one-time, multi-GB model download that blocks the very first `create()` until it finishes. It's desktop only — no Android, no iOS, no ChromeOS. And it's hardware-dependent: a machine under the bar returns `unavailable` and stays there, and there's no flag you can flip to fix that for the user. Pick the tool for the job — Nano for the 80% of asks that don't need cloud-scale reasoning, the cloud for the rest. Most teams badly overestimate how often "the rest" shows up.
+Now, let's be honest about the bill. It's a one-time, multi-GB model download that blocks the very first `create()` until it finishes. It's desktop only — Windows 10/11, macOS 13+, Linux, or ChromeOS on a Chromebook Plus (Platform 16389.0.0+); no Android, no iOS. And it's hardware-dependent: a machine under the bar returns `unavailable` and stays there, and there's no flag you can flip to fix that for the user. Pick the tool for the job — Nano for the 80% of asks that don't need cloud-scale reasoning, the cloud for the rest. Most teams badly overestimate how often "the rest" shows up.
 
 ## The one pattern every API shares
 
@@ -88,10 +88,10 @@ flowchart LR
   C --> D["destroy()"]
 ```
 
-Feature-detect first, because the global is simply `undefined` on `http://` pages and on browsers that don't ship it. Then `availability()` returns exactly one of four states: `unavailable`, `downloadable`, `downloading`, or `available`. Then `create()` — declaring the languages you'll use with `expectedInputs` and `expectedOutputs`, so the model knows what's coming in and what goes back out. Then you prompt. Then you `destroy()`, because an orphaned session pins GPU memory until the tab dies.
+Feature-detect first, because the global is simply `undefined` on `http://` pages and on browsers that don't ship it. Then `availability()` returns exactly one of four states: `unavailable`, `downloadable`, `downloading`, or `available`. Then `create()` — declaring the languages you'll use with `expectedInputs` and `expectedOutputs`, so the model knows what's coming in and what goes back out. Then you prompt. Then you `destroy()` — the garbage collector will reclaim an abandoned session eventually, but `destroy()` hands the memory back sooner.
 
 <CodeTabs>
-```js title="hello.js" {5,9-12}
+```js title="hello.js" {5,15-19}
 if (typeof LanguageModel === 'undefined') {
   // Not desktop Chrome, or not a secure context (https / localhost).
   console.log('Built-in AI is not available here.');
@@ -99,18 +99,23 @@ if (typeof LanguageModel === 'undefined') {
   const status = await LanguageModel.availability();
   // "unavailable" | "downloadable" | "downloading" | "available"
   if (status !== 'unavailable') {
-    // First run downloads ~4 GB — wire a monitor in real code (see the demo).
+    // First run downloads the model. In real code pass a `monitor` — a create()
+    // callback that reports download progress — and start create() from a user
+    // gesture, since kicking off that download needs one. The demo does both.
     const session = await LanguageModel.create({
       expectedInputs:  [{ type: 'text', languages: ['en'] }],
       expectedOutputs: [{ type: 'text', languages: ['en'] }],
     });
-    const reply = await session.prompt('In one word: where does this model run?');
-    console.log(reply); // e.g. "Locally."
+    // Stream the reply — chunks are deltas, so append them.
+    const stream = session.promptStreaming('In one sentence: where does this model run?');
+    let reply = '';
+    for await (const chunk of stream) reply += chunk;
+    console.log(reply); // e.g. "It runs locally, on the user's own device."
     session.destroy();
   }
 }
 ```
-```ts title="hello.ts" {6,8-11}
+```ts title="hello.ts" {6,13-17}
 type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
 
 if (typeof LanguageModel === 'undefined') {
@@ -122,7 +127,10 @@ if (typeof LanguageModel === 'undefined') {
       expectedInputs:  [{ type: 'text', languages: ['en'] }],
       expectedOutputs: [{ type: 'text', languages: ['en'] }],
     });
-    const reply: string = await session.prompt('In one word: where does this model run?');
+    // Stream the reply — chunks are deltas, so append them.
+    const stream = session.promptStreaming('In one sentence: where does this model run?');
+    let reply = '';
+    for await (const chunk of stream) reply += chunk;
     console.log(reply);
     session.destroy();
   }
@@ -155,9 +163,9 @@ Fix: open the page in desktop Chrome over `https` or `localhost`, and always gua
 :::caution The first call hangs for a minute
 Symptom: `create()` sits there and never resolves.
 
-Cause: the first `create()` triggers the one-time ~4 GB model download, and it won't resolve until the download finishes.
+Cause: the first `create()` triggers the one-time multi-gigabyte model download, and it won't resolve until the download finishes.
 
-Fix: pass a `monitor` and render `e.loaded * 100` as a progress bar (`e.loaded` is a 0..1 fraction — there's no `e.total`). Show progress; don't block the UI on a frozen button.
+Fix: pass a `monitor` and render `e.loaded * 100` as a progress bar (`e.loaded` is a 0..1 fraction; `e.total` is always 1). Show progress; don't block the UI on a frozen button.
 :::
 
 :::caution availability() says unavailable and never changes
@@ -165,7 +173,7 @@ Symptom: the state is stuck on `unavailable` no matter what you do.
 
 Cause: the device is under the hardware bar, on-device AI is switched off in Settings, or an enterprise policy blocks it.
 
-Fix: this isn't a bug you can code around — degrade gracefully with a message and a cloud fallback. Don't poll `availability()` in a loop hoping it flips; polling can itself kick off a download.
+Fix: this isn't a bug you can code around — degrade gracefully with a message and a cloud fallback. Don't poll `availability()` in a loop hoping it flips: it's read-only and never starts a download, so the poll just spins for nothing.
 :::
 
 ## How the course is structured
@@ -176,7 +184,7 @@ Foundations first: [Setup & the availability lifecycle](./setup-and-availability
 
 Then the core: the [Prompt API](./prompt-api), [structured output and tool calling](./structured-output-and-tools), and [image input](./multimodal). That's the raw model plus everything you can make it do.
 
-Then the task APIs — the constrained, more reliable ones. Summarizer, Translator plus Language Detector, Writer, Rewriter, Proofreader. Compress, translate, draft, fix. Each is a tuned system prompt over the same Nano weights, so it holds its shape better than asking the raw model nicely.
+Then the task APIs — the constrained, more reliable ones. Summarizer, Translator plus Language Detector, Writer, Rewriter, Proofreader. Compress, translate, draft, fix. Each one rides a task-specific LoRA adapter on the same Nano base, so it holds its shape better than asking the raw model nicely.
 
 Then the semantic layer: [embeddings](./embeddings) for search and similarity, all on-device.
 
@@ -191,7 +199,7 @@ Foundations, core, tasks, embeddings, agents, then proof it works. That's the cl
 So, the shape of it:
 
 - Built-in AI is Gemini Nano — a real model shipped inside Chrome, reached through bare globals like `LanguageModel`, running on-device with no backend, no key, and no data egress.
-- The API family is small: one Prompt API, a set of task APIs, embeddings, and an agentic/MCP layer — all over one model.
+- The API family is small: one Prompt API, a set of task APIs, embeddings, and an agentic/MCP layer — almost all of it over one model, Gemini Nano (embeddings are the exception, on their own small model).
 - On-device buys you privacy, zero marginal cost, low latency, and offline — and costs you a one-time multi-GB download, desktop-only reach, and hardware variance.
 - Every API reuses one pattern: `availability()` → `create()` → use → `destroy()`.
 

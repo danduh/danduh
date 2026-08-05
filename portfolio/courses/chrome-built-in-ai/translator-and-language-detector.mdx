@@ -25,7 +25,7 @@ every sentence. Chrome ships two on-device globals for exactly that job:
 `LanguageDetector` tells you what language the text is in and how sure it is, and
 `Translator` turns a source-target pair into translated text. By the end of this
 page you'll detect a language, read the confidence, and chain the top guess
-straight into a translation — all on the GPU that's already in the machine.
+straight into a translation — all on the hardware that's already in the machine.
 
 ## What you'll build
 
@@ -51,10 +51,10 @@ language code and a confidence between 0 and 1, sorted best-guess first. The loo
 is the one you already know — feature-detect, check `availability()`, `create()`,
 use it, `destroy()`.
 
-One quirk to bake in from line one: the list almost always ends with `und`.
-That's not a language. It's the model's own estimate that the text isn't in any
-language it knows — short strings, emoji, a lone URL, that's where `und` climbs
-the ranking.
+One quirk to bake in from line one: the list always ends with `und`. That's
+deterministic — the last entry is `und` every time. It's not a language. It's the
+model's own estimate that the text isn't in any language it knows — short strings,
+emoji, a lone URL, that's where `und` climbs the ranking.
 
 <CodeTabs>
 ```js title="demo.js"
@@ -65,26 +65,30 @@ if (typeof LanguageDetector === 'undefined') {
 const status = await LanguageDetector.availability();
 // "unavailable" | "downloadable" | "downloading" | "available"
 
-const detector = await LanguageDetector.create({
-  monitor(m) {
-    m.addEventListener('downloadprogress', (e) => {
-      // e.loaded is a 0..1 fraction — there is no e.total in current builds
-      console.log(`Detector model… ${Math.round(e.loaded * 100)}%`);
-    });
-  },
-});
-
-const results = await detector.detect('Bonjour, comment allez-vous ?');
-// [
-//   { detectedLanguage: 'fr',  confidence: 0.99  },
-//   { detectedLanguage: 'ht',  confidence: 0.004 },
-//   { detectedLanguage: 'und', confidence: 0.001 },
-// ]
-
+// Starting the model download needs a user gesture, so run create() from a click
+// handler (or guard on navigator.userActivation.isActive when it's downloadable).
 // highlight-next-line
-const top = results[0]; // sorted by confidence, best first
-console.log(top.detectedLanguage, top.confidence);
-detector.destroy();
+if (status !== 'unavailable') {
+  const detector = await LanguageDetector.create({
+    monitor(m) {
+      m.addEventListener('downloadprogress', (e) => {
+        // e.loaded is a 0..1 fraction; e.total exists and is always 1
+        console.log(`Detector model… ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
+
+  const results = await detector.detect('Bonjour, comment allez-vous ?');
+  // [
+  //   { detectedLanguage: 'fr',  confidence: 0.99  },
+  //   { detectedLanguage: 'ht',  confidence: 0.004 },
+  //   { detectedLanguage: 'und', confidence: 0.001 },
+  // ]
+
+  const top = results[0]; // sorted by confidence, best first
+  console.log(top.detectedLanguage, top.confidence);
+  detector.destroy();
+}
 ```
 ```ts title="demo.ts"
 type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available';
@@ -96,31 +100,34 @@ interface LanguageDetectionResult {
 
 const status: Availability = await LanguageDetector.availability();
 
-const detector = await LanguageDetector.create({
-  monitor(m: AICreateMonitor) {
-    m.addEventListener('downloadprogress', (e: ProgressEvent) => {
-      console.log(`Detector model… ${Math.round(e.loaded * 100)}%`);
-    });
-  },
-});
-
-const results: LanguageDetectionResult[] = await detector.detect(
-  'Bonjour, comment allez-vous ?',
-);
-
 // highlight-next-line
-const top = results[0]; // sorted by confidence, best first
-console.log(top.detectedLanguage, top.confidence);
-detector.destroy();
+if (status !== 'unavailable') {
+  const detector = await LanguageDetector.create({
+    monitor(m: CreateMonitor) {
+      m.addEventListener('downloadprogress', (e: ProgressEvent) => {
+        // e.loaded is a 0..1 fraction; e.total exists and is always 1
+        console.log(`Detector model… ${Math.round(e.loaded * 100)}%`);
+      });
+    },
+  });
+
+  const results: LanguageDetectionResult[] = await detector.detect(
+    'Bonjour, comment allez-vous ?',
+  );
+
+  const top = results[0]; // sorted by confidence, best first
+  console.log(top.detectedLanguage, top.confidence);
+  detector.destroy();
+}
 ```
 </CodeTabs>
 
 ## Probe the pair before you translate
 
 Here's where translation stops behaving like the other built-in APIs. There
-isn't one model that speaks every language — there's a pack per direction.
-English to Spanish is one download. Spanish to English is another. Japanese to
-German is a third the machine may not have at all.
+isn't one model that speaks every language — packs download per pair. English to
+Spanish is one check. Spanish to English is a separate one. Japanese to German is
+a third the machine may not have at all.
 
 So availability isn't a single yes/no. You ask per pair —
 `Translator.availability({ sourceLanguage, targetLanguage })` — and you get one
@@ -161,7 +168,7 @@ if (status === 'unavailable') {
 
 Once the pair says anything but `unavailable`, you `create()` the translator with
 the same two codes. The first time you touch a given pair, Chrome downloads its
-pack — usually 10 to 50 MB — and `create()` doesn't resolve until that finishes.
+pack — tens of megabytes — and `create()` doesn't resolve until that finishes.
 So wire the `monitor` from the first line, read `e.loaded` as a 0-to-1 fraction,
 and put something on screen that moves. Then `translate()` hands you the whole
 string back.
@@ -186,7 +193,7 @@ const output = await translator.translate('Hello, how are you?');
 const translator = await Translator.create({
   sourceLanguage,
   targetLanguage,
-  monitor(m: AICreateMonitor) {
+  monitor(m: CreateMonitor) {
     m.addEventListener('downloadprogress', (e: ProgressEvent) => {
       console.log(`Pack ${sourceLanguage}→${targetLanguage}… ${Math.round(e.loaded * 100)}%`);
     });
@@ -361,16 +368,17 @@ you forgot that a pack has to download before anything works.
 :::caution availability() returns unavailable for a language you know exists
 Symptom: `Translator.availability()` says `unavailable` for a language that
 plainly has a pack. Cause: you passed a BCP-47 region tag like `en-US` or
-`pt-BR`, and the translator matches on the base subtag. Fix: strip to the base
-code (`en`, `pt`), or probe the regional code explicitly first. If the base pair
-is still `unavailable`, that direction isn't on this device — fall back to a
-cloud translator.
+`pt-BR`. How the API should resolve a region tag to a pack is still an open
+design question, so a regional tag may not match while its base subtag does.
+Fix: try the base code (`en`, `pt`) too. If the base pair is still
+`unavailable`, that direction isn't on this device — fall back to a cloud
+translator.
 :::
 
 :::caution Detection returns und, or a confidence you can't trust
 Symptom: the top result is `und`, or a real language with a confidence near
-zero. Cause: the text is too short, mostly punctuation, or mixed-language —
-under about 20 characters, confidence collapses. Fix: guard on
+zero. Cause: the text is too short, mostly punctuation, or mixed-language — on a
+short string, confidence collapses. Fix: guard on
 `detectedLanguage !== 'und'` plus a confidence floor, then ask the user or use a
 default source instead of translating on the guess.
 :::

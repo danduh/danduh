@@ -23,7 +23,7 @@ Ok. Observability for a cloud model is handed to you in the response: logprobs, 
 
 So you build the trace yourself.
 
-Client-side, from the handful of signals Chrome actually exposes — about thirty lines of code — and nothing leaves the device unless you decide to send it. This lesson stacks that tracer up in four levels: a `console.log`, a structured span with the same shape every call, a `traceStream` wrapper that captures real latency and time-to-first-token, then shipping the span as OpenTelemetry `gen_ai.*` attributes.
+Client-side, from the handful of signals Chrome actually exposes — about thirty lines of code — and nothing leaves the device unless you decide to send it. This lesson stacks that tracer up in four levels: a `console.log`, a structured span with the same shape every call, a `traceStream` wrapper that captures real latency and time-to-first-token, and a hand-off that ships the span as OpenTelemetry `gen_ai.*` attributes.
 
 ## What you'll build
 
@@ -34,7 +34,7 @@ Client-side, from the handful of signals Chrome actually exposes — about thirt
 - Gate tracing behind an opt-in and keep raw prompts out of it, so production visitors pay nothing and nothing private leaks.
 
 :::note Prerequisites
-Desktop Chrome with built-in AI switched on, and a call worth tracing. This page builds on [the Prompt API](./prompt-api) and streams from the [Summarizer](./summarizer), so it helps to have run one already. New here? Start with [Setup & the availability lifecycle](./setup-and-availability), and keep [the compatibility matrix](./shipping-and-compatibility) handy for what's stable where. It assumes you already know the four availability states — it won't re-teach them.
+Desktop Chrome with built-in AI switched on, and a call worth tracing. This page builds on [the Prompt API](./prompt-api) and streams from the [Summarizer](./summarizer), so it helps to have run one already. It also leans on the confidence field from [LanguageDetector, and name-drops Translator](./translator-and-language-detector). New here? Start with [Setup & the availability lifecycle](./setup-and-availability), and keep [the compatibility matrix](./shipping-and-compatibility) handy for what's stable where. It assumes you already know the four availability states — it won't re-teach them.
 :::
 
 ## What you can actually capture
@@ -115,6 +115,8 @@ interface AiSpan {
   contextUsage?: number; // Prompt API only
   contextWindow?: number;
   errorName?: string;    // DOMException.name on failure
+  availability?: string; // availability() state captured before create()
+  downloadPct?: number;  // last downloadprogress value (0–100)
 }
 
 function newSpan(api: AiApi, op: string, stream: boolean): AiSpan {
@@ -246,7 +248,63 @@ const classify = (e: unknown): AiFinish =>
 
 The one-shot calls — `prompt()`, `summarize()`, a plain `await` — get the simpler sibling, `traceCall`, which times the promise, reads `result.length` for `outChars`, records the error, and re-throws it unchanged. Same span, no stream plumbing.
 
-Errors are first-class here, not an afterthought. On-device, the most useful thing you can log is why it failed: `QuotaExceededError` (input over the window — it carries `requested` and `contextWindow`), `NotSupportedError` (the feature can't run on this Chrome), and `AbortError` when someone cancels. Capture `DOMException.name` and you've turned a silent "works but subtly wrong" into a searchable field.
+<CodeTabs>
+```js title="demo.js"
+async function traceCall(api, op, session, run) {
+  const span = newSpan(api, op, false);
+  const t0 = performance.now();
+  try {
+    const result = await run();
+    span.latencyMs = performance.now() - t0;
+    if (typeof result === 'string') span.outChars = result.length; // char proxy
+    try { // Prompt API only — getters can throw on a destroyed session
+      span.contextUsage = session?.contextUsage;
+      span.contextWindow = session?.contextWindow;
+    } catch { /* session gone — skip the numbers */ }
+    emit(span);
+    return result;                       // hand the caller its value, untouched
+  } catch (e) {
+    span.latencyMs = performance.now() - t0;
+    span.finish = classify(e);
+    if (e && e.name) span.errorName = e.name;
+    emit(span);
+    throw e;                             // re-throw unchanged — the tracer never swallows
+  }
+}
+```
+```ts title="demo.ts"
+async function traceCall<T>(
+  api: AiApi,
+  op: string,
+  session: unknown,
+  run: () => Promise<T>,
+): Promise<T> {
+  const span = newSpan(api, op, false);
+  const t0 = performance.now();
+  try {
+    const result = await run();
+    span.latencyMs = performance.now() - t0;
+    if (typeof result === 'string') span.outChars = result.length; // char proxy
+    try {
+      const s = session as { contextUsage?: number; contextWindow?: number };
+      span.contextUsage = s?.contextUsage;
+      span.contextWindow = s?.contextWindow;
+    } catch { /* session gone — skip the numbers */ }
+    emit(span);
+    return result;                       // hand the caller its value, untouched
+  } catch (e) {
+    span.latencyMs = performance.now() - t0;
+    span.finish = classify(e);
+    const name = (e as { name?: string })?.name;
+    if (name) span.errorName = name;
+    emit(span);
+    throw e;                             // re-throw unchanged — the tracer never swallows
+  }
+}
+```
+</CodeTabs>
+
+Errors are first-class here, not an afterthought. On-device, the most useful thing you can log is why it failed: `QuotaExceededError` (input over the window — it carries `requested` and `contextWindow`), `NotSupportedError` (an unsupported input or output — a language tag or `expectedInputs`/`expectedOutputs` combo the model can't do; the generic can't-run-here case isn't an error at all, it's `availability()` returning `unavailable`), and `AbortError` when someone cancels. Capture `DOMException.name` and you've turned a silent "works but subtly wrong" into a searchable field.
 
 ## Level 3 — ship it as OpenTelemetry spans
 
