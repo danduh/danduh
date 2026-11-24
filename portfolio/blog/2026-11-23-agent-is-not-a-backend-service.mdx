@@ -240,6 +240,35 @@ So here is the whole position, and I will say it once. An agent built this way i
 
 ![Safe agentic stack: intent-driven agent, dual-identity token, intent-based tool, deterministic gates, then backend services.](/img/ai-agents-clients/section-09.webp)
 
+## What this design does not fix
+
+I said an agent built this way is not unsafe. I stand by it. But I would not trust an article that ends there, so here is where the design can still go wrong. None of these are an agent breaking out. All of them are people changing the design, or the design meeting people.
+
+Watch the tool list. The walk-through works because the cards agent has no way to send anything out. No email, no web fetch, no webhook. The day someone adds one, the data can leave. Then everything I just showed you stops being true. So someone has to own that list, and every new tool gets a hard look before it ships.
+
+People stop reading approvals. Let the agent ask for approval five times in a row, and by the fifth one nobody reads it. Think of cookie banners. A gate people click through blindly is not a gate. That one is not a technical problem. It is a product problem. Ask for approval rarely, and make each ask clear.
+
+The agent talks in a trusted voice. I covered this above. Poisoned text in your data can come out of the agent as "I checked, this looks like fraud, call this number." Same words as the transaction row, but now they carry the authority of your assistant. Show tool output as quoted data. Let the client decide what links and images may render.
+
+None of this makes the agent dangerous. It makes it a client that needs the same care as any other client, plus a few controls the old ones did not need.
+
+## Same discipline, a few extra controls
+
+Go back to the product manager at the table.
+
+> "When the customer says I lost my card, what should happen?"
+
+Now you have an answer, in the order she asked it. First the customer: what they said, and what they need next. Then the behavior: which expert takes the conversation, what it shows, when it asks for approval. Only then the backend: which tool, which service, which data.
+
+That is how we have always built clients.
+
+So build the agentic application like one. Authenticate every call. Give it an identity, and carry that identity, together with the customer's, on every request. Let product own the behavior. Let the services enforce the rules, exactly as they do for web and mobile.
+Then add the few things this client needs. Tools shaped by intent, with descriptions written as prompts. Expert agents with hard boundaries. An approval gate bound to the exact payload. Output shown as quoted data. A tool list that someone owns.
+Nothing here is new. That is the point.
+
+The agent is not the exception to everything we know. It is one more client. Build it like one, enforce it where we always enforce, and the ghosts go away.
+
+
 **The recap, in four rules:**
 
 ![Four design rules for production agents: agent is a client, tools speak intent, one agent per domain with a drawn handoff graph, and two identities with deterministic gates. Each panel lists the key pattern and a one-line rule.](/img/ai-agents-clients/rules-summary.webp)
