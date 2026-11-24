@@ -1,5 +1,16 @@
 [
   {
+    "name": "Agentic Patterns 3D Explorer",
+    "tag": "Interactive 3D · Agents",
+    "tagline": "Multi-agent failures you can watch happen",
+    "description": "Eight multi-agent design patterns as rotatable 3D scenes. Toggle tools, tracing and failure modes, and watch a pattern break live. Each failure is shown with the infrastructure fix that prevents it.",
+    "url": "https://agents.danduh.me/",
+    "cta": "Explore the patterns",
+    "featured": true,
+    "image": "/img/projects/agents-explorer.webp",
+    "imageAlt": "A 3D scene of a basic agent pattern: a human, an LLM, a tool and an MCP server connected by glowing data flows, with a control panel for faults and tracing."
+  },
+  {
     "name": "window.ai",
     "tag": "Browser AI · Demo",
     "tagline": "On-device AI APIs, right in the browser",
